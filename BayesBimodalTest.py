@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.stats as ss
 import matplotlib.pyplot as plt
 from emcee import PTSampler
 
@@ -117,7 +118,13 @@ class BayesBimodalTest():
         self.bimodal_samples = sampler.chain[0, :, self.nburn:, :].reshape((-1, 5))
 
     def summarise_posteriors(self):
-        pass
+        self.unimodal_mu = np.mean(self.unimodal_samples[:, 0])
+        self.unimodal_sigma = np.mean(self.unimodal_samples[:, 1])
+        self.bimodal_muA = np.mean(self.bimodal_samples[:, 0])
+        self.bimodal_muB = np.mean(self.bimodal_samples[:, 1])
+        self.bimodal_sigmaA = np.mean(self.bimodal_samples[:, 2])
+        self.bimodal_sigmaB = np.mean(self.bimodal_samples[:, 3])
+        self.bimodal_p = np.mean(self.bimodal_samples[:, 4])
 
     def diagnostic_plot(self):
         fig = plt.figure()
@@ -129,7 +136,17 @@ class BayesBimodalTest():
         prods = np.arange(self.nburn0, self.nburn0+self.nburn + self.nprod)
 
         ax00 = plt.subplot2grid((4, 2), (0, 0), colspan=2)
-        ax00.hist(self.data, bins=50, color="b", histtype="step")
+        ax00.hist(self.data, bins=50, color="b", histtype="step", normed=True)
+        x_plot = np.linspace(self.data.min(), self.data.max(), 1000)
+        ax00.plot(x_plot, ss.norm.pdf(
+            x_plot, self.unimodal_mu, self.unimodal_sigma),
+            color=unimodal_color)
+        ax00.plot(x_plot, self.bimodal_p*ss.norm.pdf(
+            x_plot, self.bimodal_muA, self.bimodal_sigmaA),
+            color=bimodal_colorA)
+        ax00.plot(x_plot, (1-self.bimodal_p)*ss.norm.pdf(
+            x_plot, self.bimodal_muB, self.bimodal_sigmaB),
+            color=bimodal_colorB)
 
         ax10 = plt.subplot2grid((4, 2), (1, 0))
         ax10.hist(self.unimodal_samples[:, 0], bins=50,
