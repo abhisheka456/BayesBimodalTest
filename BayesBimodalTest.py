@@ -203,3 +203,17 @@ class BayesBimodalTest():
             ax.axvline(self.nburn0+self.nburn, color="k", lw=0.1, alpha=0.4)
             ax.axvline(self.nburn0+self.nburn+self.nprod, color="k", lw=0.1, alpha=0.4)
         plt.savefig("temp.pdf")
+
+    def BayesFactor(self):
+        (unimodal_lnevidence, unimodal_lnevidence_err) = self.unimodal_sampler.thermodynamic_integration_log_evidence()
+        unimodal_log10evidence = unimodal_lnevidence/np.log(10)
+        unimodal_log10evidence_err = unimodal_lnevidence_err/np.log(10)
+
+        (bimodal_lnevidence, bimodal_lnevidence_err) = self.bimodal_sampler.thermodynamic_integration_log_evidence()
+        bimodal_log10evidence = bimodal_lnevidence/np.log(10)
+        bimodal_log10evidence_err = bimodal_lnevidence_err/np.log(10)
+
+        bf = bimodal_log10evidence - unimodal_log10evidence
+        bf_err = np.sqrt(bimodal_log10evidence_err**2 + unimodal_log10evidence_err**2)
+        print "Bayes factor of {} +/- {}".format(bf, bf_err)
+
