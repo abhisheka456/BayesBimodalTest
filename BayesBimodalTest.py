@@ -2,11 +2,12 @@ import numpy as np
 import scipy.stats as ss
 import matplotlib.pyplot as plt
 from emcee import PTSampler
+import seaborn as sns
 
 
 class BayesBimodalTest():
-    def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100, nprod=100,
-                 nwalkers=100):
+    def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
+                 nprod=100, nwalkers=100):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -94,13 +95,16 @@ class BayesBimodalTest():
         muA, muB, sigmaA, sigmaB, p = params
         resA = np.array(data-muA)
         resB = np.array(data-muB)
-        r = np.log(p/(sigmaA*np.sqrt(2*np.pi))*np.exp(-resA**2/(2*sigmaA**2)) +
-                   (1-p)/(sigmaB*np.sqrt(2*np.pi))*np.exp(-resB**2/(2*sigmaB**2)))
+        r = np.log(p/(sigmaA*np.sqrt(2*np.pi)) *
+                   np.exp(-resA**2/(2*sigmaA**2)) +
+                   (1-p)/(sigmaB*np.sqrt(2*np.pi)) *
+                   np.exp(-resB**2/(2*sigmaB**2)))
         return np.sum(r)
 
     def fit_bimodal(self):
         sampler = PTSampler(self.ntemps, self.nwalkers, 5, self.logl_bimodal,
-                            self.logp_bimodal, loglargs=[self.data], betas=self.betas)
+                            self.logp_bimodal, loglargs=[self.data],
+                            betas=self.betas)
         param_keys = ['mu', 'mu', 'sigma', 'sigma', 'p']
         p0 = [[[np.random.uniform(*self.get_uniform_prior_lims(key))
                 for key in param_keys]
@@ -112,10 +116,11 @@ class BayesBimodalTest():
         p0 = self.get_new_p0(sampler, 5)
         sampler.reset()
         out = sampler.run_mcmc(p0, self.nburn + self.nprod)
-        self.bimodal_chains = sampler.chain[0, :, : , :]
+        self.bimodal_chains = sampler.chain[0, :, :, :]
 
         self.bimodal_sampler = sampler
-        self.bimodal_samples = sampler.chain[0, :, self.nburn:, :].reshape((-1, 5))
+        self.bimodal_samples = sampler.chain[0, :, self.nburn:, :].reshape(
+            (-1, 5))
 
     def summarise_posteriors(self):
         self.unimodal_mu = np.mean(self.unimodal_samples[:, 0])
@@ -126,11 +131,11 @@ class BayesBimodalTest():
         self.bimodal_sigmaB = np.mean(self.bimodal_samples[:, 3])
         self.bimodal_p = np.mean(self.bimodal_samples[:, 4])
 
-    def diagnostic_plot(self):
-        fig = plt.figure()
-        unimodal_color = "k"
-        bimodal_colorA = "r"
-        bimodal_colorB = "g"
+    def diagnostic_plot(self, fname="diagnostic.pdf"):
+        fig = plt.figure(figsize=(8, 11))
+        unimodal_color = sns.xkcd_rgb["pale red"]
+        bimodal_colorA = sns.xkcd_rgb["medium green"]
+        bimodal_colorB = sns.xkcd_rgb["denim blue"]
 
         burn0s = np.arange(0, self.nburn0)
         prods = np.arange(self.nburn0, self.nburn0+self.nburn + self.nprod)
@@ -140,21 +145,24 @@ class BayesBimodalTest():
         x_plot = np.linspace(self.data.min(), self.data.max(), 1000)
         ax00.plot(x_plot, ss.norm.pdf(
             x_plot, self.unimodal_mu, self.unimodal_sigma),
-            color=unimodal_color)
+            color=unimodal_color, label="Unimodal")
         ax00.plot(x_plot, self.bimodal_p*ss.norm.pdf(
             x_plot, self.bimodal_muA, self.bimodal_sigmaA),
-            color=bimodal_colorA)
+            color=bimodal_colorA, label="Mixture A")
         ax00.plot(x_plot, (1-self.bimodal_p)*ss.norm.pdf(
             x_plot, self.bimodal_muB, self.bimodal_sigmaB),
-            color=bimodal_colorB)
+            color=bimodal_colorB, label="Mixture B")
+        ax00.set_xlabel("Data")
+        ax00.legend(loc=2, frameon=False)
 
         ax10 = plt.subplot2grid((4, 2), (1, 0))
         ax10.hist(self.unimodal_samples[:, 0], bins=50,
-                  histtype="step", color=unimodal_color)
+                  histtype="step", color=unimodal_color, label="$\mu_{0}$")
         ax10.hist(self.bimodal_samples[:, 0], bins=50,
-                  histtype="step", color=bimodal_colorA)
+                  histtype="step", color=bimodal_colorA, label="$\mu_{A}$")
         ax10.hist(self.bimodal_samples[:, 1], bins=50,
-                  histtype="step", color=bimodal_colorB)
+                  histtype="step", color=bimodal_colorB, label="$\mu_{B}$")
+        ax10.set_title("Mean posterior")
 
         ax11 = plt.subplot2grid((4, 2), (1, 1))
         ax11.plot(prods, self.unimodal_chains[:, :, 0].T, lw=0.01,
@@ -167,14 +175,16 @@ class BayesBimodalTest():
                   color=bimodal_colorB)
         ax11.plot(prods, self.bimodal_chains[:, :, 1].T, lw=0.01,
                   color=bimodal_colorB)
+        ax11.set_title("Mean trace")
 
         ax20 = plt.subplot2grid((4, 2), (2, 0))
         ax20.hist(self.unimodal_samples[:, 1], bins=50,
-                  histtype="step", color=unimodal_color)
+                  histtype="step", color=unimodal_color, label="$\sigma_{0}$")
         ax20.hist(self.bimodal_samples[:, 2], bins=50,
-                  histtype="step", color=bimodal_colorA)
+                  histtype="step", color=bimodal_colorA, label="$\sigma_{A}$")
         ax20.hist(self.bimodal_samples[:, 3], bins=50,
-                  histtype="step", color=bimodal_colorB)
+                  histtype="step", color=bimodal_colorB, label="$\sigma_{B}$")
+        ax20.set_title("Std. Dev. posterior")
 
         ax21 = plt.subplot2grid((4, 2), (2, 1))
         ax21.plot(prods, self.unimodal_chains[:, :, 1].T, lw=0.01,
@@ -187,22 +197,28 @@ class BayesBimodalTest():
                   color=bimodal_colorB)
         ax21.plot(prods, self.bimodal_chains[:, :, 3].T, lw=0.01,
                   color=bimodal_colorB)
+        ax21.set_title("Std. Dev. trace")
 
         ax30 = plt.subplot2grid((4, 2), (3, 0))
         ax30.hist(self.bimodal_samples[:, 4], bins=50, histtype="step",
-                  color=bimodal_colorA)
+                  color=bimodal_colorA, label="p")
+        ax30.set_title("Weight posterior")
 
         ax31 = plt.subplot2grid((4, 2), (3, 1))
         ax31.plot(burn0s, self.bimodal_chains0[:, :, 4].T, lw=0.01,
                   color=bimodal_colorA)
         ax31.plot(prods, self.bimodal_chains[:, :, 4].T, lw=0.01,
                   color=bimodal_colorA)
+        ax31.set_title("Weight trace")
+        ax31.set_xlabel("# steps")
 
         for ax in [ax11, ax21, ax31]:
             ax.axvline(self.nburn0, color="k", lw=0.1, alpha=0.4)
             ax.axvline(self.nburn0+self.nburn, color="k", lw=0.1, alpha=0.4)
-            ax.axvline(self.nburn0+self.nburn+self.nprod, color="k", lw=0.1, alpha=0.4)
-        plt.savefig("temp.pdf")
+            ax.axvline(self.nburn0+self.nburn+self.nprod, color="k",
+                       lw=0.5, alpha=0.4)
+        fig.tight_layout()
+        fig.savefig(fname)
 
     def BayesFactor(self):
         (unimodal_lnevidence, unimodal_lnevidence_err) = self.unimodal_sampler.thermodynamic_integration_log_evidence()
