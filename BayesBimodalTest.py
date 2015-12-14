@@ -131,7 +131,7 @@ class BayesBimodalTest():
         self.bimodal_sigmaB = np.mean(self.bimodal_samples[:, 3])
         self.bimodal_p = np.mean(self.bimodal_samples[:, 4])
 
-    def diagnostic_plot(self, fname="diagnostic.pdf"):
+    def diagnostic_plot(self, fname="diagnostic.png"):
         fig = plt.figure(figsize=(8, 11))
         unimodal_color = sns.xkcd_rgb["pale red"]
         bimodal_colorA = sns.xkcd_rgb["medium green"]

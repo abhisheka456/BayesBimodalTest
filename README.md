@@ -23,7 +23,7 @@ test = BBT.BayesBimodalTest(data, nburn0=100, nburn=100, nprod=100, ntemps=50)
 test.BayesFactor()
 ```
 
-Running this code will output a log10 Bayes factor, in this case of `70+/5` giving
+Running this code will output a log10 Bayes factor, in this case of `68.1 +/- 5.0` giving
 strong evidence in support of the Bimodal model. It will also produce a
 diagnostic plot which we show below. In the top panel is the
 original raw data along with the fitted underlying distributions, then 6 panels
@@ -31,7 +31,7 @@ gives the posterior and traces of the mean, std. dev., and the weight (only of
 the bimodal mixture model). Finally there are two plots of the therodynamic
 integration used to calculate the evidence.
 
-![demo](diagnostic.pdf)
+![demo](diagnostic.png)
 
 ## Details
 
