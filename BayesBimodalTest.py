@@ -22,7 +22,6 @@ class BayesBimodalTest():
         self.fit_unimodal()
         self.fit_bimodal()
         self.summarise_posteriors()
-        self.diagnostic_plot()
 
     def unif(self, x, a, b):
         if (x < a) or (x > b):
