@@ -31,7 +31,7 @@ gives the posterior and traces of the mean, std. dev., and the weight (only of
 the bimodal mixture model). Finally there are two plots of the therodynamic
 integration used to calculate the evidence.
 
-![demo]("diagnostic.pdf")
+![demo](diagnostic.pdf)
 
 ## Details
 
