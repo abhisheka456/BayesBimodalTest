@@ -179,12 +179,12 @@ class BayesBimodalTest():
         ax10.set_title("Mean posterior")
 
         ax11 = plt.subplot2grid((nrows, 2), (1, 1))
-        if self.unimodal_chains0:
-            ax11.plot(nburn0s, self.unimodal_chains0[:, :, 0].T, lw=trace_line_width,
+        if self.unimodal_chains0 is not None:
+            ax11.plot(burn0s, self.unimodal_chains0[:, :, 0].T, lw=trace_line_width,
                       color=unimodal_color)
         ax11.plot(prods, self.unimodal_chains[:, :, 0].T, lw=trace_line_width,
                   color=unimodal_color)
-        if self.bimodal_chains0:
+        if self.bimodal_chains0 is not None:
             ax11.plot(burn0s, self.bimodal_chains0[:, :, 0].T, lw=trace_line_width,
                       color=bimodal_colorA)
             ax11.plot(burn0s, self.bimodal_chains0[:, :, 1].T, lw=trace_line_width,
@@ -205,12 +205,12 @@ class BayesBimodalTest():
         ax20.set_title("Std. Dev. posterior")
 
         ax21 = plt.subplot2grid((nrows, 2), (2, 1))
-        if self.unimodal_chains0:
-            ax21.plot(nburn0, self.unimodal_chains0[:, :, 1].T, lw=trace_line_width,
+        if self.unimodal_chains0 is not None:
+            ax21.plot(burn0s, self.unimodal_chains0[:, :, 1].T, lw=trace_line_width,
                       color=unimodal_color)
         ax21.plot(prods, self.unimodal_chains[:, :, 1].T, lw=trace_line_width,
                   color=unimodal_color)
-        if self.bimodal_chains0:
+        if self.bimodal_chains0 is not None:
             ax21.plot(burn0s, self.bimodal_chains0[:, :, 2].T, lw=trace_line_width,
                       color=bimodal_colorA)
             ax21.plot(burn0s, self.bimodal_chains0[:, :, 3].T, lw=trace_line_width,
@@ -227,7 +227,7 @@ class BayesBimodalTest():
         ax30.set_title("Weight posterior")
 
         ax31 = plt.subplot2grid((nrows, 2), (3, 1))
-        if self.bimodal_chains0:
+        if self.bimodal_chains0 is not None:
             ax31.plot(burn0s, self.bimodal_chains0[:, :, 4].T, lw=trace_line_width,
                       color=bimodal_colorA)
         ax31.plot(prods, self.bimodal_chains[:, :, 4].T, lw=trace_line_width,
