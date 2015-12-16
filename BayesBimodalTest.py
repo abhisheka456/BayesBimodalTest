@@ -68,10 +68,15 @@ class BayesBimodalTest():
                 for key in param_keys]
                for i in range(self.nwalkers)]
               for j in range(self.ntemps)]
-        out = sampler.run_mcmc(p0, self.nburn0)
-        self.unimodal_chains0 = sampler.chain[0, :, : , :]
-        p0 = self.get_new_p0(sampler, 2)
-        sampler.reset()
+
+        if self.nburn0 != 0:
+            out = sampler.run_mcmc(p0, self.nburn0)
+            self.unimodal_chains0 = sampler.chain[0, :, : , :]
+            p0 = self.get_new_p0(sampler, 2)
+            sampler.reset()
+        else:
+            self.unimodal_chains0 = None
+
         out = sampler.run_mcmc(p0, self.nburn + self.nprod)
         self.unimodal_chains = sampler.chain[0, :, : , :]
 
@@ -110,10 +115,13 @@ class BayesBimodalTest():
                for i in range(self.nwalkers)]
               for j in range(self.ntemps)]
 
-        out = sampler.run_mcmc(p0, self.nburn0)
-        self.bimodal_chains0 = sampler.chain[0, :, : , :]
-        p0 = self.get_new_p0(sampler, 5)
-        sampler.reset()
+        if self.nburn0 != 0:
+            out = sampler.run_mcmc(p0, self.nburn0)
+            self.bimodal_chains0 = sampler.chain[0, :, : , :]
+            p0 = self.get_new_p0(sampler, 5)
+            sampler.reset()
+        else:
+            self.bimodal_chains0 = None
         out = sampler.run_mcmc(p0, self.nburn + self.nprod)
         self.bimodal_chains = sampler.chain[0, :, :, :]
 
@@ -132,7 +140,13 @@ class BayesBimodalTest():
 
     def diagnostic_plot(self, fname="diagnostic.png", trace_line_width=0.1,
                         hist_line_width=1.5):
+
         fig = plt.figure(figsize=(8, 11))
+        if self.ntemps > 1:
+            nrows = 5
+        else:
+            nrows = 4
+
         unimodal_color = sns.xkcd_rgb["pale red"]
         bimodal_colorA = sns.xkcd_rgb["medium green"]
         bimodal_colorB = sns.xkcd_rgb["denim blue"]
@@ -155,7 +169,7 @@ class BayesBimodalTest():
         ax00.set_xlabel("Data")
         ax00.legend(loc=2, frameon=False)
 
-        ax10 = plt.subplot2grid((5, 2), (1, 0))
+        ax10 = plt.subplot2grid((nrows, 2), (1, 0))
         ax10.hist(self.unimodal_samples[:, 0], bins=50, linewidth=hist_line_width,
                   histtype="step", color=unimodal_color, label="$\mu_{0}$")
         ax10.hist(self.bimodal_samples[:, 0], bins=50, linewidth=hist_line_width,
@@ -164,20 +178,24 @@ class BayesBimodalTest():
                   histtype="step", color=bimodal_colorB, label="$\mu_{B}$")
         ax10.set_title("Mean posterior")
 
-        ax11 = plt.subplot2grid((5, 2), (1, 1))
+        ax11 = plt.subplot2grid((nrows, 2), (1, 1))
+        if self.unimodal_chains0:
+            ax11.plot(nburn0s, self.unimodal_chains0[:, :, 0].T, lw=trace_line_width,
+                      color=unimodal_color)
         ax11.plot(prods, self.unimodal_chains[:, :, 0].T, lw=trace_line_width,
                   color=unimodal_color)
-        ax11.plot(burn0s, self.bimodal_chains0[:, :, 0].T, lw=trace_line_width,
-                  color=bimodal_colorA)
+        if self.bimodal_chains0:
+            ax11.plot(burn0s, self.bimodal_chains0[:, :, 0].T, lw=trace_line_width,
+                      color=bimodal_colorA)
+            ax11.plot(burn0s, self.bimodal_chains0[:, :, 1].T, lw=trace_line_width,
+                      color=bimodal_colorB)
         ax11.plot(prods, self.bimodal_chains[:, :, 0].T, lw=trace_line_width,
                   color=bimodal_colorA)
-        ax11.plot(burn0s, self.bimodal_chains0[:, :, 1].T, lw=trace_line_width,
-                  color=bimodal_colorB)
         ax11.plot(prods, self.bimodal_chains[:, :, 1].T, lw=trace_line_width,
                   color=bimodal_colorB)
         ax11.set_title("Mean trace")
 
-        ax20 = plt.subplot2grid((5, 2), (2, 0))
+        ax20 = plt.subplot2grid((nrows, 2), (2, 0))
         ax20.hist(self.unimodal_samples[:, 1], bins=50, linewidth=hist_line_width,
                   histtype="step", color=unimodal_color, label="$\sigma_{0}$")
         ax20.hist(self.bimodal_samples[:, 2], bins=50, linewidth=hist_line_width,
@@ -186,27 +204,32 @@ class BayesBimodalTest():
                   histtype="step", color=bimodal_colorB, label="$\sigma_{B}$")
         ax20.set_title("Std. Dev. posterior")
 
-        ax21 = plt.subplot2grid((5, 2), (2, 1))
+        ax21 = plt.subplot2grid((nrows, 2), (2, 1))
+        if self.unimodal_chains0:
+            ax21.plot(nburn0, self.unimodal_chains0[:, :, 1].T, lw=trace_line_width,
+                      color=unimodal_color)
         ax21.plot(prods, self.unimodal_chains[:, :, 1].T, lw=trace_line_width,
                   color=unimodal_color)
-        ax21.plot(burn0s, self.bimodal_chains0[:, :, 2].T, lw=trace_line_width,
-                  color=bimodal_colorA)
+        if self.bimodal_chains0:
+            ax21.plot(burn0s, self.bimodal_chains0[:, :, 2].T, lw=trace_line_width,
+                      color=bimodal_colorA)
+            ax21.plot(burn0s, self.bimodal_chains0[:, :, 3].T, lw=trace_line_width,
+                  color=bimodal_colorB)
         ax21.plot(prods, self.bimodal_chains[:, :, 2].T, lw=trace_line_width,
                   color=bimodal_colorA)
-        ax21.plot(burn0s, self.bimodal_chains0[:, :, 3].T, lw=trace_line_width,
-                  color=bimodal_colorB)
         ax21.plot(prods, self.bimodal_chains[:, :, 3].T, lw=trace_line_width,
                   color=bimodal_colorB)
         ax21.set_title("Std. Dev. trace")
 
-        ax30 = plt.subplot2grid((5, 2), (3, 0))
+        ax30 = plt.subplot2grid((nrows, 2), (3, 0))
         ax30.hist(self.bimodal_samples[:, 4], bins=50, histtype="step",
                   color=bimodal_colorA, label="p", linewidth=hist_line_width)
         ax30.set_title("Weight posterior")
 
-        ax31 = plt.subplot2grid((5, 2), (3, 1))
-        ax31.plot(burn0s, self.bimodal_chains0[:, :, 4].T, lw=trace_line_width,
-                  color=bimodal_colorA)
+        ax31 = plt.subplot2grid((nrows, 2), (3, 1))
+        if self.bimodal_chains0:
+            ax31.plot(burn0s, self.bimodal_chains0[:, :, 4].T, lw=trace_line_width,
+                      color=bimodal_colorA)
         ax31.plot(prods, self.bimodal_chains[:, :, 4].T, lw=trace_line_width,
                   color=bimodal_colorA)
         ax31.set_title("Weight trace")
@@ -218,19 +241,21 @@ class BayesBimodalTest():
             ax.axvline(self.nburn0+self.nburn+self.nprod, color="k",
                        lw=0.5, alpha=0.4)
 
-        ax40 = plt.subplot2grid((5, 2), (4, 0))
-        betas = self.unimodal_sampler.betas
-        alllnlikes = self.unimodal_sampler.lnlikelihood[:, :, self.nburn:]
-        mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
-        ax40.semilogx(betas, mean_lnlikes, "-o", color="k")
-        ax40.set_title("Unimodal thermodynamic integration")
+        if self.ntemps > 1:
+            print "here"
+            ax40 = plt.subplot2grid((nrows, 2), (4, 0))
+            betas = self.unimodal_sampler.betas
+            alllnlikes = self.unimodal_sampler.lnlikelihood[:, :, self.nburn:]
+            mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
+            ax40.semilogx(betas, mean_lnlikes, "-o", color="k")
+            ax40.set_title("Unimodal thermodynamic integration")
 
-        ax41 = plt.subplot2grid((5, 2), (4, 1))
-        betas = self.bimodal_sampler.betas
-        alllnlikes = self.bimodal_sampler.lnlikelihood[:, :, self.nburn:]
-        mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
-        ax41.semilogx(betas, mean_lnlikes, "-o", color="k")
-        ax41.set_title("Bimodal thermodynamic integration")
+            ax41 = plt.subplot2grid((nrows, 2), (4, 1))
+            betas = self.bimodal_sampler.betas
+            alllnlikes = self.bimodal_sampler.lnlikelihood[:, :, self.nburn:]
+            mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
+            ax41.semilogx(betas, mean_lnlikes, "-o", color="k")
+            ax41.set_title("Bimodal thermodynamic integration")
 
         fig.tight_layout()
         fig.savefig(fname)
