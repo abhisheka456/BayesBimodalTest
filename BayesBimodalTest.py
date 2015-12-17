@@ -154,7 +154,7 @@ class BayesBimodalTest():
         burn0s = np.arange(0, self.nburn0)
         prods = np.arange(self.nburn0, self.nburn0+self.nburn + self.nprod)
 
-        ax00 = plt.subplot2grid((5, 2), (0, 0), colspan=2)
+        ax00 = plt.subplot2grid((nrows, 2), (0, 0), colspan=2)
         ax00.hist(self.data, bins=50, color="b", histtype="step", normed=True)
         x_plot = np.linspace(self.data.min(), self.data.max(), 1000)
         ax00.plot(x_plot, ss.norm.pdf(
@@ -242,7 +242,6 @@ class BayesBimodalTest():
                        lw=0.5, alpha=0.4)
 
         if self.ntemps > 1:
-            print "here"
             ax40 = plt.subplot2grid((nrows, 2), (4, 0))
             betas = self.unimodal_sampler.betas
             alllnlikes = self.unimodal_sampler.lnlikelihood[:, :, self.nburn:]
