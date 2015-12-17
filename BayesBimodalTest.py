@@ -236,10 +236,11 @@ class BayesBimodalTest():
         ax31.set_xlabel("# steps")
 
         for ax in [ax11, ax21, ax31]:
-            ax.axvline(self.nburn0, color="k", lw=0.1, alpha=0.4)
-            ax.axvline(self.nburn0+self.nburn, color="k", lw=0.1, alpha=0.4)
+            lw = 1.1
+            ax.axvline(self.nburn0, color="k", lw=lw, alpha=0.4)
+            ax.axvline(self.nburn0+self.nburn, color="k", lw=lw, alpha=0.4)
             ax.axvline(self.nburn0+self.nburn+self.nprod, color="k",
-                       lw=0.5, alpha=0.4)
+                       lw=lw, alpha=0.4)
 
         if self.ntemps > 1:
             ax40 = plt.subplot2grid((nrows, 2), (4, 0))
@@ -259,7 +260,7 @@ class BayesBimodalTest():
         fig.tight_layout()
         fig.savefig(fname)
 
-    def BayesFactor(self):
+    def BayesFactor(self, print_result=True):
         (unimodal_lnevidence, unimodal_lnevidence_err) = self.unimodal_sampler.thermodynamic_integration_log_evidence()
         unimodal_log10evidence = unimodal_lnevidence/np.log(10)
         unimodal_log10evidence_err = unimodal_lnevidence_err/np.log(10)
@@ -270,9 +271,12 @@ class BayesBimodalTest():
 
         bf = bimodal_log10evidence - unimodal_log10evidence
         bf_err = np.sqrt(bimodal_log10evidence_err**2 + unimodal_log10evidence_err**2)
-        print "Bayes factor of {} +/- {}".format(bf, bf_err)
 
         Umu = self.get_uniform_prior_lims('mu')
         Usigma = self.get_uniform_prior_lims('sigma')
         occams_factor = np.log10(Umu[1] - Umu[0]) + np.log10(Usigma[1] - Usigma[0])
-        print "Occams factor is {:1.2f}".format(occams_factor)
+        if print_result:
+            print "Bayes factor of {} +/- {}".format(bf, bf_err)
+            print "Occams factor is {:1.2f}".format(occams_factor)
+        else:
+            return bf, bf_err, occams_factor
