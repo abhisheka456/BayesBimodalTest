@@ -19,7 +19,7 @@ class BayesBimodalTest():
         self.nprod = nprod
         self.nwalkers = nwalkers
 
-        self.fit_unimodal()
+        self.fit_Nmodal(2)
         self.fit_bimodal()
         self.summarise_posteriors()
 
@@ -128,6 +128,65 @@ class BayesBimodalTest():
         self.bimodal_sampler = sampler
         self.bimodal_samples = sampler.chain[0, :, self.nburn:, :].reshape(
             (-1, 5))
+
+    def logp_Nmodal(self, params):
+        N = (len(params) + 1) / 3
+        mus = params[:N]
+        if any(np.diff(mus) < 0):
+            return -np.inf
+
+        logp = 0
+        logp += np.sum([self.unif(p, *self.get_uniform_prior_lims('mu'))
+                        for p in mus])
+        logp += np.sum([self.unif(p, *self.get_uniform_prior_lims('sigma'))
+                        for p in params[N:2*N]])
+        logp += np.sum([self.unif(p, *self.get_uniform_prior_lims('p'))
+                        for p in params[2*N:]])
+        return logp
+
+    def logl_Nmodal(self, params, data):
+        N = (len(params) + 1) / 3
+        mu = np.array(params[:N])
+        sigma = np.array(params[N:2*N])
+        p = params[2*N:]
+        np.append(p, (1 - np.sum(p)))
+        p = np.array(p)
+
+        res = data.reshape((len(data), 1)) - mu.T
+
+        r = np.log(p/(sigma*np.sqrt(2*np.pi)) *
+                   np.exp(-res**2/(2*sigma**2)))
+        return np.sum(r)
+
+    def fit_Nmodal(self, N):
+        """ Fit the N-modal distribution
+
+        params is a 3N-1 vector, with the first N as the mu's, the second N
+        the sigmas, and the last N-1 being the p's.
+        """
+        ndim = N*3 - 1
+        sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
+                            self.logp_Nmodal, loglargs=[self.data],
+                            betas=self.betas)
+        param_keys = ['mu'] * N + ['sigma'] * N + ['p'] * (N-1)
+        p0 = [[[np.random.uniform(*self.get_uniform_prior_lims(key))
+                for key in param_keys]
+               for i in range(self.nwalkers)]
+              for j in range(self.ntemps)]
+
+        if self.nburn0 != 0:
+            out = sampler.run_mcmc(p0, self.nburn0)
+            self.Nmodal_chains0 = sampler.chain[0, :, : , :]
+            p0 = self.get_new_p0(sampler, ndim)
+            sampler.reset()
+        else:
+            self.Nmodal_chains0 = none
+        out = sampler.run_mcmc(p0, self.nburn + self.nprod)
+        self.Nmodal_chains = sampler.chain[0, :, :, :]
+
+        self.Nmodal_sampler = sampler
+        self.Nmodal_samples = sampler.chain[0, :, self.nburn:, :].reshape(
+            (-1, ndim))
 
     def summarise_posteriors(self):
         self.unimodal_mu = np.mean(self.unimodal_samples[:, 0])
