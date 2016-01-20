@@ -26,11 +26,11 @@ class BayesBimodalTest():
             self.fit_Nmodal(N)
         self.summarise_posteriors()
 
-    def unif(self, x, a, b):
+    def log_unif(self, x, a, b):
         if (x < a) or (x > b):
             return -np.inf
         else:
-            return 1./(b-a)
+            return np.log(1./(b-a))
 
     def get_uniform_prior_lims(self, key):
         if key == "mu":
@@ -43,8 +43,8 @@ class BayesBimodalTest():
     def logp_unimodal(self, params):
         muA, sigmaA = params
         logp = 0
-        logp += self.unif(muA, *self.get_uniform_prior_lims('mu'))
-        logp += self.unif(sigmaA, *self.get_uniform_prior_lims('sigma'))
+        logp += self.log_unif(muA, *self.get_uniform_prior_lims('mu'))
+        logp += self.log_unif(sigmaA, *self.get_uniform_prior_lims('sigma'))
         return logp
 
     def logl_unimodal(self, params, data):
@@ -89,11 +89,11 @@ class BayesBimodalTest():
     def logp_bimodal(self, params):
         muA, muB, sigmaA, sigmaB, p = params
         logp = 0
-        logp += self.unif(muA, *self.get_uniform_prior_lims('mu'))
-        logp += self.unif(muB, *self.get_uniform_prior_lims('mu'))
-        logp += self.unif(sigmaA, *self.get_uniform_prior_lims('sigma'))
-        logp += self.unif(sigmaB, *self.get_uniform_prior_lims('sigma'))
-        logp += self.unif(p, *self.get_uniform_prior_lims('p'))
+        logp += self.log_unif(muA, *self.get_uniform_prior_lims('mu'))
+        logp += self.log_unif(muB, *self.get_uniform_prior_lims('mu'))
+        logp += self.log_unif(sigmaA, *self.get_uniform_prior_lims('sigma'))
+        logp += self.log_unif(sigmaB, *self.get_uniform_prior_lims('sigma'))
+        logp += self.log_unif(p, *self.get_uniform_prior_lims('p'))
         if muA > muB:
             logp += -np.inf
         return logp
@@ -139,11 +139,11 @@ class BayesBimodalTest():
         #    return -np.inf
 
         logp = 0
-        logp += np.sum([self.unif(p, *self.get_uniform_prior_lims('mu'))
+        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
                         for p in mus])
-        logp += np.sum([self.unif(p, *self.get_uniform_prior_lims('sigma'))
+        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
                         for p in params[N:2*N]])
-        logp += np.sum([self.unif(p, *self.get_uniform_prior_lims('p'))
+        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
                         for p in params[2*N:]])
         return logp
 
