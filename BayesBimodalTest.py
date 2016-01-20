@@ -65,9 +65,10 @@ class BayesBimodalTest():
 
     def get_uniform_prior_lims(self, key):
         if key == "mu":
-            return [self.data_min, self.data_max]
+            ave = np.average(self.data)
+            return [self.data_min-ave, self.data_max+ave]
         if key == "sigma":
-            return [1e-20*self.data_std, self.data_std]
+            return [1e-20*self.data_std, 10*self.data_std]
         if key == "p":
             return [0, 1]
 
