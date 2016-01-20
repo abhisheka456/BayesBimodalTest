@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.stats as ss
 import matplotlib.pyplot as plt
+import itertools
 from emcee import PTSampler
 import seaborn as sns
 
@@ -132,7 +133,9 @@ class BayesBimodalTest():
 
         colors = [sns.xkcd_rgb["pale red"],
                   sns.xkcd_rgb["medium green"],
-                  sns.xkcd_rgb["denim blue"]
+                  sns.xkcd_rgb["denim blue"],
+                  sns.xkcd_rgb["seafoam"],
+                  sns.xkcd_rgb["rich purple"]
                   ]
 
         burn0s = np.arange(0, self.nburn0)
@@ -153,12 +156,12 @@ class BayesBimodalTest():
 
         for i, N in enumerate(self.Ns):
 
+            c = colors[i]
             saved_data = self.saved_data['N{}'.format(N)]
             zi = zip(saved_data['ps'], saved_data['mus'], saved_data['sigmas'])
             for j, (p, mu, sigma) in enumerate(zi):
-                c = colors[i+j]
                 ax00.plot(x_plot, p*ss.norm.pdf(x_plot, mu, sigma),
-                          color=c, label="N{}({})".format(N, j))
+                          color=c, label="$N{}_{}$".format(N, j))
 
             for j, (lax, rax) in enumerate(zip(Laxes, Raxes)):
                 if j == 2:
@@ -166,16 +169,15 @@ class BayesBimodalTest():
                 else:
                     krange = N
                 for k in range(krange):
-                    c = colors[i+k]
                     lax.hist(saved_data['samples'][:, j*N+k], bins=50,
-                              linewidth=hist_line_width, histtype="step",
-                              color=c)
+                             linewidth=hist_line_width, histtype="step",
+                             color=c)
 
                     if saved_data['chains0'] is not None:
                         rax.plot(burn0s, saved_data['chains0'][:, :, j*N+k].T,
-                                  lw=trace_line_width, color=c)
+                                 lw=trace_line_width, color=c)
                     rax.plot(prods, saved_data['chains'][:, :, j*N+k].T,
-                              lw=trace_line_width, color=c)
+                             lw=trace_line_width, color=c)
 
         ax00.set_xlabel("Data")
         ax00.legend(loc=2, frameon=False)
@@ -193,37 +195,20 @@ class BayesBimodalTest():
             ax.axvline(self.nburn0+self.nburn+self.nprod, color="k",
                        lw=lw, alpha=0.4)
 
-        #if self.ntemps > 1:
-        #    ax40 = plt.subplot2grid((nrows, 2), (nrows-1, 0), colspan=2)
-        #    for i, d in enumerate(self.degrees):
-        #        betas = self.betas
-        #        alllnlikes = self.stored_data["p{}".format(d)][
-        #            'sampler'].lnlikelihood[:, :, self.nburn:]
-        #        mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
-        #        ax40.semilogx(betas, mean_lnlikes, "-o", color=colors[i])
-        #        ax40.set_title("Linear thermodynamic integration")
-
-
-
-        #if self.ntemps > 1:
-        #    ax40 = plt.subplot2grid((nrows, 2), (4, 0))
-        #    betas = self.unimodal_sampler.betas
-        #    alllnlikes = self.unimodal_sampler.lnlikelihood[:, :, self.nburn:]
-        #    mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
-        #    ax40.semilogx(betas, mean_lnlikes, "-o", color="k")
-        #    ax40.set_title("Unimodal thermodynamic integration")
-
-        #    ax41 = plt.subplot2grid((nrows, 2), (4, 1))
-        #    betas = self.bimodal_sampler.betas
-        #    alllnlikes = self.bimodal_sampler.lnlikelihood[:, :, self.nburn:]
-        #    mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
-        #    ax41.semilogx(betas, mean_lnlikes, "-o", color="k")
-        #    ax41.set_title("Bimodal thermodynamic integration")
+        if self.ntemps > 1:
+            ax40 = plt.subplot2grid((nrows, 2), (nrows-1, 0), colspan=2)
+            for i, N in enumerate(self.Ns):
+                betas = self.betas
+                alllnlikes = self.saved_data["N{}".format(N)][
+                    'sampler'].lnlikelihood[:, :, self.nburn:]
+                mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
+                ax40.semilogx(betas, mean_lnlikes, "-o", color=colors[i])
+                ax40.set_title("Linear thermodynamic integration")
 
         fig.tight_layout()
         fig.savefig(fname)
 
-    def BayesFactor(self, print_result=True):
+    def BayesFactorOLD(self, print_result=True):
         (unimodal_lnevidence, unimodal_lnevidence_err) = self.unimodal_sampler.thermodynamic_integration_log_evidence()
         unimodal_log10evidence = unimodal_lnevidence/np.log(10)
         unimodal_log10evidence_err = unimodal_lnevidence_err/np.log(10)
@@ -243,3 +228,24 @@ class BayesBimodalTest():
             print "Occams factor is {:1.2f}".format(occams_factor)
         else:
             return bf, bf_err, occams_factor
+
+    def BayesFactor(self, print_result=True):
+        evi_err = []
+        for N in self.Ns:
+            name = "N{}".format(N)
+            sampler = self.saved_data[name]['sampler']
+            lnevidence, lnevidence_err = sampler.thermodynamic_integration_log_evidence()
+            log10evidence = lnevidence/np.log(10)
+            log10evidence_err = lnevidence_err/np.log(10)
+            evi_err.append((N, log10evidence, log10evidence_err))
+
+        if print_result:
+            for mA, mB in itertools.combinations(evi_err, 2):
+                mA_deg, mA_evi, mA_err = mA
+                mA_name = "{}-modal".format(mA_deg)
+                mB_deg, mB_evi, mB_err = mB
+                mB_name = "{}-modal".format(mB_deg)
+                bf = mB_evi - mA_evi
+                bf_err = np.sqrt(mA_err**2 + mB_err**2)
+                print "log10 Bayes Factor ({}, {}) = {} +/- {}".format(
+                    mB_name, mA_name, bf, bf_err)

@@ -22,7 +22,8 @@ dataB = np.random.normal(-2, 1.5, N/2)
 data = np.concatenate([dataA, dataB])
 
 # Create a test object
-test = BBT.BayesBimodalTest(data, nburn0=100, nburn=100, nprod=100, ntemps=50)
+test = BBT.BayesBimodalTest(data, Ns=[1, 2], nburn0=100, nburn=100, nprod=100,
+                             ntemps=50)
 
 # Create the diagnostic plot
 test.diagnostic_plot()
@@ -31,7 +32,11 @@ test.diagnostic_plot()
 test.BayesFactor()
 ```
 
-Running this code will output a log10 Bayes factor, in this case of `68.1 +/- 5.0` giving
+Note that `Ns` passed to the test specify that we want to test a unimodal
+vs bimodal distribution. Passing in a longer list will compute evidence
+for all given integers.
+
+Running this code will output a log10 Bayes factor, in this case of `77.7 +/- 5.0` giving
 strong evidence in support of the Bimodal model. To be specific, this mean that
 `P(bimodal| data) / P(unimodal| data)) = 10^{68.51}`. The error is an estimate
 of the systematic error produced by the numerical integration of the temperature,
