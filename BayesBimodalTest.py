@@ -37,7 +37,7 @@ class BayesBimodalTest():
         if key == "mu":
             return [self.data_min, self.data_max]
         if key == "sigma":
-            return [1e-20*self.data_std, 2*self.data_std]
+            return [1e-20*self.data_std, self.data_std]
         if key == "p":
             return [0, 1]
 
@@ -54,7 +54,10 @@ class BayesBimodalTest():
     def logp_Nmodal(self, params):
         N = (len(params) + 1) / 3
         mus = params[:N]
+        ps = params[2*N:]
         if any(np.diff(mus) < 0):
+            return -np.inf
+        if np.sum(ps) > 1:
             return -np.inf
 
         logp = 0
@@ -152,7 +155,7 @@ class BayesBimodalTest():
         Raxes = [ax11, ax21, ax31]
 
         ax00.hist(self.data, bins=50, color="b", histtype="step", normed=True)
-        x_plot = np.linspace(self.data.min(), self.data.max(), 1000)
+        x_plot = np.linspace(self.data.min(), self.data.max(), 100)
 
         for i, N in enumerate(self.Ns):
 
@@ -208,26 +211,13 @@ class BayesBimodalTest():
         fig.tight_layout()
         fig.savefig(fname)
 
-    def BayesFactorOLD(self, print_result=True):
-        (unimodal_lnevidence, unimodal_lnevidence_err) = self.unimodal_sampler.thermodynamic_integration_log_evidence()
-        unimodal_log10evidence = unimodal_lnevidence/np.log(10)
-        unimodal_log10evidence_err = unimodal_lnevidence_err/np.log(10)
-
-        (bimodal_lnevidence, bimodal_lnevidence_err) = self.bimodal_sampler.thermodynamic_integration_log_evidence()
-        bimodal_log10evidence = bimodal_lnevidence/np.log(10)
-        bimodal_log10evidence_err = bimodal_lnevidence_err/np.log(10)
-
-        bf = bimodal_log10evidence - unimodal_log10evidence
-        bf_err = np.sqrt(bimodal_log10evidence_err**2 + unimodal_log10evidence_err**2)
-
+    def OccamFactor(self):
         Umu = self.get_uniform_prior_lims('mu')
         Usigma = self.get_uniform_prior_lims('sigma')
-        occams_factor = np.log10(Umu[1] - Umu[0]) + np.log10(Usigma[1] - Usigma[0])
-        if print_result:
-            print "Bayes factor of {} +/- {}".format(bf, bf_err)
-            print "Occams factor is {:1.2f}".format(occams_factor)
-        else:
-            return bf, bf_err, occams_factor
+        occams_factor = (np.log10(Umu[1] - Umu[0])
+                         + np.log10(Usigma[1] - Usigma[0])
+                         + np.log10(1))
+        print "Occams factor is {}".format(occams_factor)
 
     def BayesFactor(self, print_result=True):
         evi_err = []
@@ -249,3 +239,5 @@ class BayesBimodalTest():
                 bf_err = np.sqrt(mA_err**2 + mB_err**2)
                 print "log10 Bayes Factor ({}, {}) = {} +/- {}".format(
                     mB_name, mA_name, bf, bf_err)
+
+        self.evi_err = evi_err
