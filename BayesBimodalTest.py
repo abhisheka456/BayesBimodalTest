@@ -7,6 +7,32 @@ import seaborn as sns
 
 
 class BayesBimodalTest():
+    """ A Test module for bimodality, and more general N-modality in a data set
+
+    Performs an MCMC parameter estimation for a list `Ns` of N values where N
+    is the number of components in the mixture model. For each N, the evidence
+    is calculated using thermodynamic integration.
+
+    Params
+    -----
+    Ns : list of ints
+        The N values to fit and compare, for bimodal vs unimodal use [1, 2]
+    ntemps : int
+        The number of temperatures to use in the MCMC fitting - increase this
+        to reduce the error on the evidence estimate
+    betamin : int of list of ints
+        The minimum beta = 1/T to use in fitting. It should be checked,
+        in the diagnostic plot, that this is small enough to capture the
+        high-temperature behaviour in the numerical integration. If a list,
+        then the length should match that of Ns since each N can take a
+        different minimum temperature.
+    nburn0, nburn, nprod : int
+        The number of steps to take in the three stages of the MCMC fitting
+    nwalkers : int
+        The number of walkers to use
+
+    """
+
     def __init__(self, data, Ns=[1, 2], ntemps=20, betamin=-22,
                  nburn0=100, nburn=100, nprod=100, nwalkers=100):
         self.data = data
