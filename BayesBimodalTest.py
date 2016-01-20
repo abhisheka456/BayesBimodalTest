@@ -16,7 +16,11 @@ class BayesBimodalTest():
         self.data_max = np.max(data)
         self.data_std = np.std(data)
         self.ntemps = ntemps
-        self.betas = np.logspace(0, betamin, ntemps)
+        if type(betamin) is int:
+            self.betas = lambda i: np.logspace(0, betamin, ntemps)
+        else:
+            self.betas = lambda i: np.logspace(0, betamin[i], ntemps)
+
         self.nburn0 = nburn0
         self.nburn = nburn
         self.nprod = nprod
@@ -91,7 +95,7 @@ class BayesBimodalTest():
         ndim = N*3 - 1
         sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
                             self.logp_Nmodal, loglargs=[self.data],
-                            betas=self.betas)
+                            betas=self.betas(self.Ns.index(N)))
         param_keys = ['mu'] * N + ['sigma'] * N + ['p'] * (N-1)
         p0 = [[[np.random.uniform(*self.get_uniform_prior_lims(key))
                 for key in param_keys]
@@ -125,8 +129,11 @@ class BayesBimodalTest():
             saved_data['ps'].append(1-np.sum(saved_data['ps']))
             self.saved_data['N{}'.format(N)] = saved_data
 
-    def diagnostic_plot(self, fname="diagnostic.png", trace_line_width=0.1,
-                        hist_line_width=1.5):
+    def diagnostic_plot(self, Ns=None, fname="diagnostic.png",
+                        trace_line_width=0.1, hist_line_width=1.5):
+
+        if Ns is None:
+            Ns = self.Ns
 
         fig = plt.figure(figsize=(8, 11))
         if self.ntemps > 1:
@@ -157,7 +164,7 @@ class BayesBimodalTest():
         ax00.hist(self.data, bins=50, color="b", histtype="step", normed=True)
         x_plot = np.linspace(self.data.min(), self.data.max(), 100)
 
-        for i, N in enumerate(self.Ns):
+        for i, N in enumerate(Ns):
 
             c = colors[i]
             saved_data = self.saved_data['N{}'.format(N)]
@@ -200,8 +207,8 @@ class BayesBimodalTest():
 
         if self.ntemps > 1:
             ax40 = plt.subplot2grid((nrows, 2), (nrows-1, 0), colspan=2)
-            for i, N in enumerate(self.Ns):
-                betas = self.betas
+            for i, N in enumerate(Ns):
+                betas = self.betas(self.Ns.index(N))
                 alllnlikes = self.saved_data["N{}".format(N)][
                     'sampler'].lnlikelihood[:, :, self.nburn:]
                 mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
