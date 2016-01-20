@@ -40,19 +40,6 @@ class BayesBimodalTest():
         if key == "p":
             return [0, 1]
 
-    def logp_unimodal(self, params):
-        muA, sigmaA = params
-        logp = 0
-        logp += self.log_unif(muA, *self.get_uniform_prior_lims('mu'))
-        logp += self.log_unif(sigmaA, *self.get_uniform_prior_lims('sigma'))
-        return logp
-
-    def logl_unimodal(self, params, data):
-        muA, sigmaA = params
-        resA = np.array(data-muA)
-        r = np.log(1/(sigmaA*np.sqrt(2*np.pi))*np.exp(-resA**2/(2*sigmaA**2)))
-        return np.sum(r)
-
     def get_new_p0(self, sampler, ndim, scatter_val=1e-3):
         pF = sampler.chain[:, :, -1, :].reshape(
             self.ntemps, self.nwalkers, ndim)[0, :, :]
@@ -62,75 +49,6 @@ class BayesBimodalTest():
         p0 = [[p + scatter_val * p * np.random.randn(ndim)
               for i in xrange(self.nwalkers)] for j in xrange(self.ntemps)]
         return p0
-
-    def fit_unimodal(self):
-        sampler = PTSampler(self.ntemps, self.nwalkers, 2, self.logl_unimodal,
-                            self.logp_unimodal, loglargs=[self.data], betas=self.betas)
-        param_keys = ['mu', 'sigma']
-        p0 = [[[np.random.uniform(*self.get_uniform_prior_lims(key))
-                for key in param_keys]
-               for i in range(self.nwalkers)]
-              for j in range(self.ntemps)]
-
-        if self.nburn0 != 0:
-            out = sampler.run_mcmc(p0, self.nburn0)
-            self.unimodal_chains0 = sampler.chain[0, :, : , :]
-            p0 = self.get_new_p0(sampler, 2)
-            sampler.reset()
-        else:
-            self.unimodal_chains0 = None
-
-        out = sampler.run_mcmc(p0, self.nburn + self.nprod)
-        self.unimodal_chains = sampler.chain[0, :, : , :]
-
-        self.unimodal_sampler = sampler
-        self.unimodal_samples = sampler.chain[0, :, self.nburn:, :].reshape((-1, 2))
-
-    def logp_bimodal(self, params):
-        muA, muB, sigmaA, sigmaB, p = params
-        logp = 0
-        logp += self.log_unif(muA, *self.get_uniform_prior_lims('mu'))
-        logp += self.log_unif(muB, *self.get_uniform_prior_lims('mu'))
-        logp += self.log_unif(sigmaA, *self.get_uniform_prior_lims('sigma'))
-        logp += self.log_unif(sigmaB, *self.get_uniform_prior_lims('sigma'))
-        logp += self.log_unif(p, *self.get_uniform_prior_lims('p'))
-        if muA > muB:
-            logp += -np.inf
-        return logp
-
-    def logl_bimodal(self, params, data):
-        muA, muB, sigmaA, sigmaB, p = params
-        resA = np.array(data-muA)
-        resB = np.array(data-muB)
-        r = np.log(p/(sigmaA*np.sqrt(2*np.pi)) *
-                   np.exp(-resA**2/(2*sigmaA**2)) +
-                   (1-p)/(sigmaB*np.sqrt(2*np.pi)) *
-                   np.exp(-resB**2/(2*sigmaB**2)))
-        return np.sum(r)
-
-    def fit_bimodal(self):
-        sampler = PTSampler(self.ntemps, self.nwalkers, 5, self.logl_bimodal,
-                            self.logp_bimodal, loglargs=[self.data],
-                            betas=self.betas)
-        param_keys = ['mu', 'mu', 'sigma', 'sigma', 'p']
-        p0 = [[[np.random.uniform(*self.get_uniform_prior_lims(key))
-                for key in param_keys]
-               for i in range(self.nwalkers)]
-              for j in range(self.ntemps)]
-
-        if self.nburn0 != 0:
-            out = sampler.run_mcmc(p0, self.nburn0)
-            self.bimodal_chains0 = sampler.chain[0, :, : , :]
-            p0 = self.get_new_p0(sampler, 5)
-            sampler.reset()
-        else:
-            self.bimodal_chains0 = None
-        out = sampler.run_mcmc(p0, self.nburn + self.nprod)
-        self.bimodal_chains = sampler.chain[0, :, :, :]
-
-        self.bimodal_sampler = sampler
-        self.bimodal_samples = sampler.chain[0, :, self.nburn:, :].reshape(
-            (-1, 5))
 
     def logp_Nmodal(self, params):
         N = (len(params) + 1) / 3
@@ -182,7 +100,7 @@ class BayesBimodalTest():
             p0 = self.get_new_p0(sampler, ndim)
             sampler.reset()
         else:
-            saved_data["chains0"] = none
+            saved_data["chains0"] = None
         out = sampler.run_mcmc(p0, self.nburn + self.nprod)
         saved_data["chains"] = sampler.chain[0, :, :, :]
 
@@ -193,15 +111,15 @@ class BayesBimodalTest():
 
     def summarise_posteriors(self):
         for N in self.Ns:
-           saved_data = self.saved_data['N{}'.format(N)]
-           saved_data['mus'] = [
-               np.mean(saved_data['samples'][:, i]) for i in range(N)]
-           saved_data['sigmas'] = [
-               np.mean(saved_data['samples'][:, i]) for i in range(N, 2*N)]
-           saved_data['ps'] = [
-               np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N-1)]
-           saved_data['ps'].append(1-np.sum(saved_data['ps']))
-           self.saved_data['N{}'.format(N)] = saved_data
+            saved_data = self.saved_data['N{}'.format(N)]
+            saved_data['mus'] = [
+                np.mean(saved_data['samples'][:, i]) for i in range(N)]
+            saved_data['sigmas'] = [
+                np.mean(saved_data['samples'][:, i]) for i in range(N, 2*N)]
+            saved_data['ps'] = [
+                np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N-1)]
+            saved_data['ps'].append(1-np.sum(saved_data['ps']))
+            self.saved_data['N{}'.format(N)] = saved_data
 
     def diagnostic_plot(self, fname="diagnostic.png", trace_line_width=0.1,
                         hist_line_width=1.5):
