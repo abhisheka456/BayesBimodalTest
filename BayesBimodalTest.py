@@ -135,8 +135,8 @@ class BayesBimodalTest():
     def logp_Nmodal(self, params):
         N = (len(params) + 1) / 3
         mus = params[:N]
-        #if any(np.diff(mus) < 0):
-        #    return -np.inf
+        if any(np.diff(mus) < 0):
+            return -np.inf
 
         logp = 0
         logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
@@ -153,11 +153,9 @@ class BayesBimodalTest():
         sigma = np.array(params[N:2*N])
         p = params[2*N:]
         p = np.append(p, (1 - np.sum(p)))
-
         res = (data.reshape((len(data), 1)) - mu.T)
-
-        r = np.log(p/(sigma*np.sqrt(2*np.pi)) *
-                   np.exp(-res**2/(2*sigma**2)))
+        r = np.log(np.sum(p/(sigma*np.sqrt(2*np.pi)) *
+                          np.exp(-res**2/(2*sigma**2)), axis=1))
         return np.sum(r)
 
     def fit_Nmodal(self, N):
