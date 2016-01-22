@@ -65,12 +65,34 @@ class BayesBimodalTest():
 
     def get_uniform_prior_lims(self, key):
         if key == "mu":
-            ave = np.average(self.data)
-            return [self.data_min-ave, self.data_max+ave]
+            return [self.data_min, self.data_max]
         if key == "sigma":
             return [1e-20*self.data_std, 10*self.data_std]
         if key == "p":
             return [0, 1]
+
+    def create_initial_p0(self, N):
+        """ Generates a sensible starting point for the walkers based on the
+            prior and label degenerecy checks
+        """
+
+        param_keys = ['mu'] * N + ['sigma'] * N + ['p'] * (N-1)
+        p0 = []
+        for k in range(self.ntemps):
+            p0_1 = []
+            for j in range(self.nwalkers):
+                p0_2 = []
+                for i, key in enumerate(param_keys):
+                    component = np.mod(i, N)
+                    [lower, upper] = self.get_uniform_prior_lims(key)
+                    dp = (upper - lower) / float(N)
+                    component_range = [lower + component*dp,
+                                       lower + (component+1)*dp]
+                    p0_2.append(np.random.uniform(*component_range))
+                p0_1.append(p0_2)
+            p0.append(p0_1)
+
+        return p0
 
     def get_new_p0(self, sampler, ndim, scatter_val=1e-3):
         pF = sampler.chain[:, :, -1, :].reshape(
@@ -123,11 +145,7 @@ class BayesBimodalTest():
         sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
                             self.logp_Nmodal, loglargs=[self.data],
                             betas=self.betas(self.Ns.index(N)))
-        param_keys = ['mu'] * N + ['sigma'] * N + ['p'] * (N-1)
-        p0 = [[[np.random.uniform(*self.get_uniform_prior_lims(key))
-                for key in param_keys]
-               for i in range(self.nwalkers)]
-              for j in range(self.ntemps)]
+        p0 = self.create_initial_p0(N)
 
         if self.nburn0 != 0:
             out = sampler.run_mcmc(p0, self.nburn0)
