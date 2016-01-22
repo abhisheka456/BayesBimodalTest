@@ -3,6 +3,7 @@ import scipy.stats as ss
 import matplotlib.pyplot as plt
 import itertools
 from emcee import PTSampler
+from scipy.special import erf
 import seaborn as sns
 
 
@@ -45,6 +46,12 @@ class BayesBimodalTest():
         self.nwalkers = nwalkers
         self.saved_data = {}
 
+    def saved_data_name(self, N, skew):
+        if skew is False:
+            return "N{}".format(N)
+        else:
+            return "NS{}".format(N)
+
     def log_unif(self, x, a, b):
         if (x < a) or (x > b):
             return -np.inf
@@ -53,18 +60,25 @@ class BayesBimodalTest():
 
     def get_uniform_prior_lims(self, key):
         if key == "mu":
-            return [self.data_min, self.data_max]
+            Range = self.data_max - self.data_min
+            return [self.data_min-Range, self.data_max+Range]
         if key == "sigma":
             return [1e-20*self.data_std, 10*self.data_std]
         if key == "p":
             return [0, 1]
+        if key == "alpha":
+            return [-10*self.data_std, 10*self.data_std]
 
-    def create_initial_p0(self, N):
+
+    def create_initial_p0(self, N, skew=False):
         """ Generates a sensible starting point for the walkers based on the
             prior and label degenerecy checks
         """
 
-        param_keys = ['mu'] * N + ['sigma'] * N + ['p'] * (N-1)
+        if skew is False:
+            param_keys = ['mu'] * N + ['sigma'] * N + ['p'] * (N-1)
+        else:
+            param_keys = ['mu'] * N + ['sigma'] * N + ['alpha'] * N + ['p'] * (N-1)
         p0 = []
         for k in range(self.ntemps):
             p0_1 = []
@@ -128,6 +142,7 @@ class BayesBimodalTest():
         the sigmas, and the last N-1 being the p's.
         """
 
+        name = self.saved_data_name(N, False)
         saved_data = {}
         ndim = N*3 - 1
         sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
@@ -148,21 +163,101 @@ class BayesBimodalTest():
         saved_data["sampler"] = sampler
         saved_data["samples"] = sampler.chain[0, :, self.nburn:, :].reshape(
             (-1, ndim))
-        self.saved_data['N{}'.format(N)] = saved_data
+        self.saved_data[name] = saved_data
         self.summarise_posteriors(N)
 
-    def summarise_posteriors(self, N):
-        saved_data = self.saved_data['N{}'.format(N)]
+    def logp_SkewNmodal(self, params):
+        N = (len(params) + 1) / 4
+        mus = params[:N]
+        ps = params[2*N:]
+        if any(np.diff(mus) < 0):
+            return -np.inf
+        if np.sum(ps) > 1:
+            return -np.inf
+
+        logp = 0
+        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
+                        for p in mus])
+        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
+                        for p in params[N:2*N]])
+        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('alpha'))
+                        for p in params[2*N:3*N]])
+        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
+                        for p in params[3*N:]])
+
+        return logp
+
+    def logl_SkewNmodal(self, params, data):
+        N = (len(params) + 1) / 3
+        mu = np.array(params[:N])
+        sigma = np.array(params[N:2*N])
+        alpha = np.array(params[2*N:3*N])
+        p = params[3*N:]
+        p = np.append(p, (1 - np.sum(p)))
+        res = (data.reshape((len(data), 1)) - mu.T)
+        arg = alpha * res / (np.sqrt(2) * sigma)
+        r = np.log(np.sum(2*p/(sigma*np.sqrt(2*np.pi)) *
+                          np.exp(-res**2/(2*sigma**2)) *
+                          .5*(1+erf(arg)), axis=1))
+        return np.sum(r)
+
+    def fit_SkewNmodal(self, N):
+        """ Fit the N-modal distribution
+
+        params is a 3N-1 vector, with the first N as the mu's, the second N
+        the sigmas, and the last N-1 being the p's.
+        """
+
+        name = self.saved_data_name(N, True)
+        saved_data = {}
+        ndim = N*4 - 1
+        sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_SkewNmodal,
+                            self.logp_SkewNmodal, loglargs=[self.data],
+                            betas=self.betas)
+        p0 = self.create_initial_p0(N, skew=True)
+
+        if self.nburn0 != 0:
+            out = sampler.run_mcmc(p0, self.nburn0)
+            saved_data["chains0"] = sampler.chain[0, :, : , :]
+            p0 = self.get_new_p0(sampler, ndim)
+            sampler.reset()
+        else:
+            saved_data["chains0"] = None
+        out = sampler.run_mcmc(p0, self.nburn + self.nprod)
+        saved_data["chains"] = sampler.chain[0, :, :, :]
+
+        saved_data["sampler"] = sampler
+        saved_data["samples"] = sampler.chain[0, :, self.nburn:, :].reshape(
+            (-1, ndim))
+        self.saved_data[name] = saved_data
+        self.summarise_posteriors(N, skew=True)
+
+    def summarise_posteriors(self, N, skew=False):
+        name = self.saved_data_name(N, skew)
+        saved_data = self.saved_data[name]
         saved_data['mus'] = [
             np.mean(saved_data['samples'][:, i]) for i in range(N)]
         saved_data['sigmas'] = [
             np.mean(saved_data['samples'][:, i]) for i in range(N, 2*N)]
-        saved_data['ps'] = [
-            np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N-1)]
-        saved_data['ps'].append(1-np.sum(saved_data['ps']))
-        self.saved_data['N{}'.format(N)] = saved_data
+        if skew:
+            saved_data['alphas'] = [
+                np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N)]
+            saved_data['ps'] = [
+                np.mean(saved_data['samples'][:, i]) for i in range(3*N, 4*N-1)]
+            saved_data['ps'].append(1-np.sum(saved_data['ps']))
+        else:
+            saved_data['ps'] = [
+                np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N-1)]
+            saved_data['ps'].append(1-np.sum(saved_data['ps']))
 
-    def diagnostic_plot(self, Ns=None, fname="diagnostic.png",
+        self.saved_data[name] = saved_data
+
+    def pdf(self, x, mu, sigma, p, alpha=0):
+        phi = p*ss.norm.pdf(x, mu, sigma)
+        Phi = .5 * (1 + erf(alpha * (x - mu)/sigma))
+        return 2 * phi * Phi
+
+    def diagnostic_plot(self, Ns=None, skews=None, fname="diagnostic.png",
                         trace_line_width=0.1, hist_line_width=1.5):
 
         if type(Ns) is int:
@@ -173,6 +268,15 @@ class BayesBimodalTest():
             nrows = 5
         else:
             nrows = 4
+
+        if skews:
+            if len(skews) != len(Ns):
+                raise ValueError("len(skews) == len(Ns)")
+            nrows += 1
+            skewed = True
+        else:
+            skews = [False] * len(Ns)
+            skewed = False
 
         colors = [sns.xkcd_rgb["pale red"],
                   sns.xkcd_rgb["medium green"],
@@ -194,20 +298,33 @@ class BayesBimodalTest():
         Laxes = [ax10, ax20, ax30]
         Raxes = [ax11, ax21, ax31]
 
+        if skewed:
+            ax40 = plt.subplot2grid((nrows, 2), (4, 0))
+            ax41 = plt.subplot2grid((nrows, 2), (4, 1))
+            Laxes.append(ax40)
+            Raxes.append(ax41)
+
+
         ax00.hist(self.data, bins=50, color="b", histtype="step", normed=True)
         x_plot = np.linspace(self.data.min(), self.data.max(), 100)
 
-        for i, N in enumerate(Ns):
-
+        for i, (N, skew) in enumerate(zip(Ns, skews)):
+            name = self.saved_data_name(N, skew)
             c = colors[i]
-            saved_data = self.saved_data['N{}'.format(N)]
-            zi = zip(saved_data['ps'], saved_data['mus'], saved_data['sigmas'])
-            for j, (p, mu, sigma) in enumerate(zi):
-                ax00.plot(x_plot, p*ss.norm.pdf(x_plot, mu, sigma),
+            saved_data = self.saved_data[name]
+            if skew:
+                alphas = saved_data['alphas']
+            else:
+                alphas = [0] * N
+            zi = zip(saved_data['ps'], saved_data['mus'], saved_data['sigmas'],
+                     alphas)
+
+            for j, (p, mu, sigma, alpha) in enumerate(zi):
+                ax00.plot(x_plot, self.pdf(x_plot, mu, sigma, p, alpha),
                           color=c, label="$N{}_{}$".format(N, j))
 
             for j, (lax, rax) in enumerate(zip(Laxes, Raxes)):
-                if j == 2:
+                if j == len(Laxes)-1:
                     krange = N-1
                 else:
                     krange = N
@@ -228,8 +345,11 @@ class BayesBimodalTest():
         ax11.set_title("Mean trace")
         ax20.set_title("Sigma posterior")
         ax21.set_title("Sigma trace")
-        ax30.set_title("p posterior")
-        ax31.set_title("p trace")
+        if skewed:
+            ax30.set_title(r"$\alpha$ posterior")
+            ax31.set_title(r"$\alpha$ trace")
+        Laxes[-1].set_title("p posterior")
+        Raxes[-1].set_title("p trace")
 
         for ax in Raxes:
             lw = 1.1
