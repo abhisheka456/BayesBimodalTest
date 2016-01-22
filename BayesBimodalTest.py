@@ -15,8 +15,6 @@ class BayesBimodalTest():
 
     Params
     -----
-    Ns : list of ints
-        The N values to fit and compare, for bimodal vs unimodal use [1, 2]
     ntemps : int
         The number of temperatures to use in the MCMC fitting - increase this
         to reduce the error on the evidence estimate
@@ -33,29 +31,19 @@ class BayesBimodalTest():
 
     """
 
-    def __init__(self, data, Ns=[1, 2], ntemps=20, betamin=-22,
+    def __init__(self, data, ntemps=20, betamin=-22,
                  nburn0=100, nburn=100, nprod=100, nwalkers=100):
         self.data = data
-        self.Ns = Ns
-        self.max_N = max(Ns)
         self.data_min = np.min(data)
         self.data_max = np.max(data)
         self.data_std = np.std(data)
         self.ntemps = ntemps
-        if type(betamin) is int:
-            self.betas = lambda i: np.logspace(0, betamin, ntemps)
-        else:
-            self.betas = lambda i: np.logspace(0, betamin[i], ntemps)
-
+        self.betas = np.logspace(0, betamin, ntemps)
         self.nburn0 = nburn0
         self.nburn = nburn
         self.nprod = nprod
         self.nwalkers = nwalkers
         self.saved_data = {}
-
-        for N in Ns:
-            self.fit_Nmodal(N)
-        self.summarise_posteriors()
 
     def log_unif(self, x, a, b):
         if (x < a) or (x > b):
@@ -144,7 +132,7 @@ class BayesBimodalTest():
         ndim = N*3 - 1
         sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
                             self.logp_Nmodal, loglargs=[self.data],
-                            betas=self.betas(self.Ns.index(N)))
+                            betas=self.betas)
         p0 = self.create_initial_p0(N)
 
         if self.nburn0 != 0:
@@ -161,24 +149,24 @@ class BayesBimodalTest():
         saved_data["samples"] = sampler.chain[0, :, self.nburn:, :].reshape(
             (-1, ndim))
         self.saved_data['N{}'.format(N)] = saved_data
+        self.summarise_posteriors(N)
 
-    def summarise_posteriors(self):
-        for N in self.Ns:
-            saved_data = self.saved_data['N{}'.format(N)]
-            saved_data['mus'] = [
-                np.mean(saved_data['samples'][:, i]) for i in range(N)]
-            saved_data['sigmas'] = [
-                np.mean(saved_data['samples'][:, i]) for i in range(N, 2*N)]
-            saved_data['ps'] = [
-                np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N-1)]
-            saved_data['ps'].append(1-np.sum(saved_data['ps']))
-            self.saved_data['N{}'.format(N)] = saved_data
+    def summarise_posteriors(self, N):
+        saved_data = self.saved_data['N{}'.format(N)]
+        saved_data['mus'] = [
+            np.mean(saved_data['samples'][:, i]) for i in range(N)]
+        saved_data['sigmas'] = [
+            np.mean(saved_data['samples'][:, i]) for i in range(N, 2*N)]
+        saved_data['ps'] = [
+            np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N-1)]
+        saved_data['ps'].append(1-np.sum(saved_data['ps']))
+        self.saved_data['N{}'.format(N)] = saved_data
 
     def diagnostic_plot(self, Ns=None, fname="diagnostic.png",
                         trace_line_width=0.1, hist_line_width=1.5):
 
-        if Ns is None:
-            Ns = self.Ns
+        if type(Ns) is int:
+            Ns = [Ns]
 
         fig = plt.figure(figsize=(8, 11))
         if self.ntemps > 1:
