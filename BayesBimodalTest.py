@@ -49,8 +49,9 @@ class BayesBimodalTest():
     def saved_data_name(self, N, skew):
         if skew is False:
             return "N{}".format(N)
-        else:
+        elif skew is True:
             return "NS{}".format(N)
+
 
     def log_unif(self, x, a, b):
         if (x < a) or (x > b):
@@ -85,12 +86,15 @@ class BayesBimodalTest():
             for j in range(self.nwalkers):
                 p0_2 = []
                 for i, key in enumerate(param_keys):
-                    component = np.mod(i, N)
-                    [lower, upper] = self.get_uniform_prior_lims(key)
-                    dp = (upper - lower) / float(N)
-                    component_range = [lower + component*dp,
-                                       lower + (component+1)*dp]
-                    p0_2.append(np.random.uniform(*component_range))
+                    if key == "mu":
+                        component = np.mod(i, N)
+                        [lower, upper] = self.get_uniform_prior_lims(key)
+                        dp = (upper - lower) / float(N)
+                        component_range = [lower + component*dp,
+                                           lower + (component+1)*dp]
+                        p0_2.append(np.random.uniform(*component_range))
+                    else:
+                        p0_2.append(np.random.uniform(*self.get_uniform_prior_lims(key)))
                 p0_1.append(p0_2)
             p0.append(p0_1)
 
@@ -324,7 +328,14 @@ class BayesBimodalTest():
                           color=c, label="$N{}_{}$".format(N, j))
 
             for j, (lax, rax) in enumerate(zip(Laxes, Raxes)):
+                if skew is False and skewed is True:
+                    if j == 2:
+                        continue # Skip alpha
+                    if j > 2:
+                        j -= 1
                 if j == len(Laxes)-1:
+                    krange = N-1
+                elif skew is False and skewed is True and j == len(Laxes)-2:
                     krange = N-1
                 else:
                     krange = N
@@ -360,9 +371,10 @@ class BayesBimodalTest():
 
         if self.ntemps > 1:
             ax40 = plt.subplot2grid((nrows, 2), (nrows-1, 0), colspan=2)
-            for i, N in enumerate(Ns):
-                betas = self.betas(self.Ns.index(N))
-                alllnlikes = self.saved_data["N{}".format(N)][
+            for i, (N, skew) in enumerate(zip(Ns, skews)):
+                betas = self.betas
+                name = self.saved_data_name(N, skew)
+                alllnlikes = self.saved_data[name][
                     'sampler'].lnlikelihood[:, :, self.nburn:]
                 mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
                 ax40.semilogx(betas, mean_lnlikes, "-o", color=colors[i])
@@ -379,22 +391,25 @@ class BayesBimodalTest():
                          + np.log10(1))
         print "Occams factor is {}".format(occams_factor)
 
-    def BayesFactor(self, print_result=True):
+    def BayesFactor(self, Ns, skews=None, print_result=True):
+        if skews is None:
+            skews = [False] * len(Ns)
+        elif len(skews) != len(Ns):
+            raise ValueError("len(skews) == len(Ns)")
+
         evi_err = []
-        for N in self.Ns:
-            name = "N{}".format(N)
+        for N, skew in zip(Ns, skews):
+            name = self.saved_data_name(N, skew)
             sampler = self.saved_data[name]['sampler']
             lnevidence, lnevidence_err = sampler.thermodynamic_integration_log_evidence()
             log10evidence = lnevidence/np.log(10)
             log10evidence_err = lnevidence_err/np.log(10)
-            evi_err.append((N, log10evidence, log10evidence_err))
+            evi_err.append((name, log10evidence, log10evidence_err))
 
         if print_result:
             for mA, mB in itertools.combinations(evi_err, 2):
-                mA_deg, mA_evi, mA_err = mA
-                mA_name = "{}-modal".format(mA_deg)
-                mB_deg, mB_evi, mB_err = mB
-                mB_name = "{}-modal".format(mB_deg)
+                mA_name, mA_evi, mA_err = mA
+                mB_name, mB_evi, mB_err = mB
                 bf = mB_evi - mA_evi
                 bf_err = np.sqrt(mA_err**2 + mB_err**2)
                 print "log10 Bayes Factor ({}, {}) = {} +/- {}".format(
