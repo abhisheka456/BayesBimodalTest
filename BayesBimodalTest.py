@@ -29,11 +29,15 @@ class BayesBimodalTest():
         The number of steps to take in the three stages of the MCMC fitting
     nwalkers : int
         The number of walkers to use
+    p_lower_bound: float [0, 1]
+        The lower bound for the p prior. Default is 0, but if one wants to
+        force modes to exist this can be set to a positive float less than
+        one, for example `p = 0.1`.
 
     """
 
-    def __init__(self, data, ntemps=20, betamin=-22,
-                 nburn0=100, nburn=100, nprod=100, nwalkers=100):
+    def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
+                 nprod=100, nwalkers=100, p_lower_bound=0):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -45,13 +49,13 @@ class BayesBimodalTest():
         self.nprod = nprod
         self.nwalkers = nwalkers
         self.saved_data = {}
+        self.p_lower_bound = p_lower_bound
 
     def saved_data_name(self, N, skew):
         if skew is False:
             return "N{}".format(N)
         elif skew is True:
             return "NS{}".format(N)
-
 
     def log_unif(self, x, a, b):
         if (x < a) or (x > b):
@@ -66,10 +70,9 @@ class BayesBimodalTest():
         if key == "sigma":
             return [1e-20*self.data_std, 10*self.data_std]
         if key == "p":
-            return [0, 1]
+            return [self.p_lower_bound, 1]
         if key == "alpha":
             return [-10*self.data_std, 10*self.data_std]
-
 
     def create_initial_p0(self, N, skew=False):
         """ Generates a sensible starting point for the walkers based on the
