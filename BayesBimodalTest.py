@@ -119,7 +119,7 @@ class BayesBimodalTest():
         ps = params[2*N:]
         if any(np.diff(mus) < 0):
             return -np.inf
-        if np.sum(ps) > 1:
+        if np.sum(ps) > 1-self.p_lower_bound:
             return -np.inf
 
         logp = 0
