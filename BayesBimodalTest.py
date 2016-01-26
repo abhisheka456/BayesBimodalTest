@@ -63,6 +63,9 @@ class BayesBimodalTest():
         else:
             return np.log(1./(b-a))
 
+    def log_norm(self, x, mu, sigma):
+        return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
+
     def get_uniform_prior_lims(self, key):
         if key == "mu":
             Range = self.data_max - self.data_min
@@ -71,8 +74,12 @@ class BayesBimodalTest():
             return [1e-20*self.data_std, 10*self.data_std]
         if key == "p":
             return [self.p_lower_bound, 1]
-        if key == "alpha":
+        if key == "alpha":  # Used to generate p0
             return [-10*self.data_std, 10*self.data_std]
+
+    def get_normal_prior_lims(self, key):
+        if key == "alpha":
+            return [0, 10*self.data_std]
 
     def create_initial_p0(self, N, skew=False):
         """ Generates a sensible starting point for the walkers based on the
@@ -187,7 +194,7 @@ class BayesBimodalTest():
                         for p in mus])
         logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
                         for p in params[N:2*N]])
-        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('alpha'))
+        logp += np.sum([self.log_norm(p, *self.get_normal_prior_lims('alpha'))
                         for p in params[2*N:3*N]])
         logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
                         for p in params[3*N:]])
