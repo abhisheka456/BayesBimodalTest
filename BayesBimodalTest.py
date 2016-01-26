@@ -272,7 +272,8 @@ class BayesBimodalTest():
         return 2 * phi * Phi
 
     def diagnostic_plot(self, Ns=None, skews=None, fname="diagnostic.png",
-                        trace_line_width=0.1, hist_line_width=1.5):
+                        trace_line_width=0.1, hist_line_width=1.5, 
+                        separate=False):
 
         if type(Ns) is int:
             Ns = [Ns]
@@ -323,6 +324,7 @@ class BayesBimodalTest():
         x_plot = np.linspace(self.data.min(), self.data.max(), 100)
 
         for i, (N, skew) in enumerate(zip(Ns, skews)):
+            y = np.zeros(len(x_plot))
             name = self.saved_data_name(N, skew)
             c = colors[i]
             saved_data = self.saved_data[name]
@@ -334,8 +336,14 @@ class BayesBimodalTest():
                      alphas)
 
             for j, (p, mu, sigma, alpha) in enumerate(zi):
-                ax00.plot(x_plot, self.pdf(x_plot, mu, sigma, p, alpha),
-                          color=c, label="$N{}_{}$".format(N, j))
+                if separate:
+                    ax00.plot(x_plot, self.pdf(x_plot, mu, sigma, p, alpha),
+                              color=c, label="$N{}_{}$".format(N, j))
+                else:
+                    y += self.pdf(x_plot, mu, sigma, p, alpha)
+            if separate is False:
+                ax00.plot(x_plot, y, linestyle="-", color=c,
+                          label="$N{}_{}$".format(N, j))
 
             for j, (lax, rax) in enumerate(zip(Laxes, Raxes)):
                 if skew is False and skewed is True:
