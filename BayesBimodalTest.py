@@ -68,10 +68,9 @@ class BayesBimodalTest():
 
     def get_uniform_prior_lims(self, key):
         if key == "mu":
-            Range = self.data_max - self.data_min
-            return [self.data_min-Range, self.data_max+Range]
+            return [self.data_min, self.data_max]
         if key == "sigma":
-            return [1e-20*self.data_std, 10*self.data_std]
+            return [1e-20*self.data_std, 2*self.data_std]
         if key == "p":
             return [self.p_lower_bound, 1]
         if key == "alpha":  # Used to generate p0
