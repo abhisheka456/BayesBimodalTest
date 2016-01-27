@@ -409,6 +409,29 @@ class BayesBimodalTest():
                          + np.log10(1))
         print "Occams factor is {}".format(occams_factor)
 
+    def RecalculateEvidence(self, sampler):
+        """ Recalculate the evidence when logl contains nans """
+
+        nburn = self.nburn
+
+        betas = sampler.betas
+        alllnlikes = sampler.lnlikelihood[:, :, nburn:]
+        mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
+
+        mean_lnlikes = mean_lnlikes[::-1]
+        betas = betas[::-1]
+
+        idxs = np.isinf(mean_lnlikes)
+        mean_lnlikes = mean_lnlikes[~idxs]
+        betas = betas[~idxs]
+        lnevidence = np.trapz(mean_lnlikes, betas)
+        z1 = np.trapz(mean_lnlikes, betas)
+        z2 = np.trapz(mean_lnlikes[::-1][::2][::-1],
+                      betas[::-1][::2][::-1])
+        lnevidence_err = np.abs(z1 - z2)
+
+        return lnevidence, lnevidence_err
+
     def BayesFactor(self, Ns, skews=None, print_result=True):
         if skews is None:
             skews = [False] * len(Ns)
@@ -419,7 +442,12 @@ class BayesBimodalTest():
         for N, skew in zip(Ns, skews):
             name = self.saved_data_name(N, skew)
             sampler = self.saved_data[name]['sampler']
-            lnevidence, lnevidence_err = sampler.thermodynamic_integration_log_evidence()
+            fburnin = float(self.nburn)/(self.nburn+self.nprod)
+            lnevidence, lnevidence_err = sampler.thermodynamic_integration_log_evidence(
+                fburnin=fburnin)
+            if np.isinf(lnevidence):
+                print "Recalculating evidence for {} due to inf".format(name)
+                lnevidence, lnevidence_err = sampler.RecalculateEvidence(sampler)
             log10evidence = lnevidence/np.log(10)
             log10evidence_err = lnevidence_err/np.log(10)
             evi_err.append((name, log10evidence, log10evidence_err))
