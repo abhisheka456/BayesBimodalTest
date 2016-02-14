@@ -50,6 +50,7 @@ class BayesBimodalTest():
         self.nwalkers = nwalkers
         self.saved_data = {}
         self.p_lower_bound = p_lower_bound
+        self.fitted_Ns = []
 
     def saved_data_name(self, N, skew):
         if skew is False:
@@ -274,14 +275,22 @@ class BayesBimodalTest():
                         trace_line_width=0.1, hist_line_width=1.5, 
                         separate=False):
 
-        if type(Ns) is int:
-            Ns = [Ns]
-
-        fig = plt.figure(figsize=(8, 11))
         if self.ntemps > 1:
             nrows = 5
         else:
             nrows = 4
+
+        if Ns is None and skews is None:
+            Ns = []
+            skews = []
+            for key in self.fitted_Ns:
+                Ns.append(int(key[-1]))
+                if "S" in key:
+                    skews.append(True)
+                else:
+                    skews.append(False)
+        if type(Ns) is int:
+            Ns = [Ns]
 
         if skews:
             if len(skews) != len(Ns):
@@ -291,6 +300,8 @@ class BayesBimodalTest():
         else:
             skews = [False] * len(Ns)
             skewed = False
+
+        fig = plt.figure(figsize=(8, 11))
 
         colors = [sns.xkcd_rgb["pale red"],
                   sns.xkcd_rgb["medium green"],
@@ -431,8 +442,18 @@ class BayesBimodalTest():
 
         return lnevidence, lnevidence_err
 
-    def BayesFactor(self, Ns, skews=None, print_result=True):
-        if skews is None:
+    def BayesFactor(self, Ns=None, skews=None, print_result=True):
+
+        if Ns is None and skews is None:
+            Ns = []
+            skews = []
+            for key in self.fitted_Ns:
+                Ns.append(int(key[-1]))
+                if "S" in key:
+                    skews.append(True)
+                else:
+                    skews.append(False)
+        elif type(Ns) == list and skews is None:
             skews = [False] * len(Ns)
         elif len(skews) != len(Ns):
             raise ValueError("len(skews) == len(Ns)")
