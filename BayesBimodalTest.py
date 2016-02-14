@@ -8,11 +8,24 @@ import seaborn as sns
 
 
 class BayesBimodalTest():
-    """ A Test module for bimodality, and more general N-modality in a data set
+    """ A Bayesian model comparison for N-modality in a data set
 
-    Performs an MCMC parameter estimation for a list `Ns` of N values where N
-    is the number of components in the mixture model. For each N, the evidence
-    is calculated using thermodynamic integration.
+    Usage
+    -----
+        To fit a unimodal and bimodal Gaussian mixture model to data
+
+        ```
+        test = BayesBimodalTest(data)
+        test.fit_Nmodal(1)
+        test.fit_Nmodal(2)
+        ```
+
+        Then, to calculate the Bayes factor
+
+        ```
+        test.BayesFactor([1, 2])
+        ```
+
 
     Params
     -----
@@ -34,6 +47,11 @@ class BayesBimodalTest():
         force modes to exist this can be set to a positive float less than
         one, for example `p = 0.1`.
 
+    Note:
+        The priors for all parameters are chosen automatically, to see how this
+        is implemented, or overwrite the defaults, see `get_uniform_prior_lims`
+        and `get_normal_prior_lims`.
+
     """
 
     def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
@@ -53,6 +71,7 @@ class BayesBimodalTest():
         self.fitted_Ns = []
 
     def saved_data_name(self, N, skew):
+        """ Helper function to generate the saved data filename """
         if skew is False:
             return "N{}".format(N)
         elif skew is True:
@@ -68,6 +87,7 @@ class BayesBimodalTest():
         return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
 
     def get_uniform_prior_lims(self, key):
+        """ Return uniform prior limits from the parameter name (key) """
         if key == "mu":
             return [self.data_min, self.data_max]
         if key == "sigma":
@@ -78,6 +98,7 @@ class BayesBimodalTest():
             return [-10*self.data_std, 10*self.data_std]
 
     def get_normal_prior_lims(self, key):
+        """ Return uniform prior limits from the parameter name (key) """
         if key == "alpha":
             return [0, 10*self.data_std]
 
@@ -104,13 +125,20 @@ class BayesBimodalTest():
                                            lower + (component+1)*dp]
                         p0_2.append(np.random.uniform(*component_range))
                     else:
-                        p0_2.append(np.random.uniform(*self.get_uniform_prior_lims(key)))
+                        p0_2.append(np.random.uniform(
+                            *self.get_uniform_prior_lims(key)))
                 p0_1.append(p0_2)
             p0.append(p0_1)
 
         return p0
 
     def get_new_p0(self, sampler, ndim, scatter_val=1e-3):
+        """ Returns new initial positions for walkers are burn0 stage
+
+        This returns new positions for all walkers by scattering points about
+        the maximum posterior with scale `scatter_val`.
+
+        """
         pF = sampler.chain[:, :, -1, :].reshape(
             self.ntemps, self.nwalkers, ndim)[0, :, :]
         lnp = sampler.lnprobability[:, :, -1].reshape(
@@ -150,15 +178,16 @@ class BayesBimodalTest():
         return np.sum(r)
 
     def fit_Nmodal(self, N):
-        """ Fit the N-modal distribution
+        """ Fit the N-component Gaussian mixture modal
 
-        params is a 3N-1 vector, with the first N as the mu's, the second N
-        the sigmas, and the last N-1 being the p's.
+        Note:
+            `params` is a 3N-1 vector, with the first N as the mu's, the second
+            N the sigmas, and the last N-1 being the p's.
         """
 
         name = self.saved_data_name(N, False)
         saved_data = {}
-        ndim = N*3 - 1
+        ndim = N * 3 - 1
         sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
                             self.logp_Nmodal, loglargs=[self.data],
                             betas=self.betas)
@@ -179,11 +208,12 @@ class BayesBimodalTest():
             (-1, ndim))
         self.saved_data[name] = saved_data
         self.summarise_posteriors(N)
+        self.fitted_Ns.append(name)
 
     def logp_SkewNmodal(self, params):
         N = (len(params) + 1) / 4
         mus = params[:N]
-        ps = params[2*N:]
+        ps = params[2*N:] # Error?
         if any(np.diff(mus) < 0):
             return -np.inf
         if np.sum(ps) > 1:
@@ -221,6 +251,13 @@ class BayesBimodalTest():
         params is a 3N-1 vector, with the first N as the mu's, the second N
         the sigmas, and the last N-1 being the p's.
         """
+        """ Fit the N-component Gaussian mixture modal
+
+        Note:
+            `params` is a 3N-1 vector, with the first N as the mu's, the second
+            N the sigmas, and the last N-1 being the p's.
+        """
+
 
         name = self.saved_data_name(N, True)
         saved_data = {}
@@ -245,6 +282,7 @@ class BayesBimodalTest():
             (-1, ndim))
         self.saved_data[name] = saved_data
         self.summarise_posteriors(N, skew=True)
+        self.fitted_Ns.append(name)
 
     def summarise_posteriors(self, N, skew=False):
         name = self.saved_data_name(N, skew)
