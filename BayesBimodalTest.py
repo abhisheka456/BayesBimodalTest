@@ -200,7 +200,6 @@ class BayesBimodalTest():
     def fit_method(self, sampler, p0, name, ndim):
         saved_data = {}
         if self.nburn0 != 0:
-            out = sampler.run_mcmc(p0, self.nburn0)
             sampler_out0 = self._try_parallel(sampler, p0, self.nburn0)
             saved_data["chains0"] = sampler_out0.chain[0, :, : , :]
             p0 = self.get_new_p0(sampler, ndim)
