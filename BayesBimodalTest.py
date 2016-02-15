@@ -12,6 +12,7 @@ try:
 except ImportError:
     use_parallel_global = False
 
+
 class BayesBimodalTest():
     """ A Bayesian model comparison for N-modality in a data set
 
@@ -51,6 +52,8 @@ class BayesBimodalTest():
         The lower bound for the p prior. Default is 0, but if one wants to
         force modes to exist this can be set to a positive float less than
         one, for example `p = 0.1`.
+    verbose: bool
+        Print additional information
 
     Note:
         The priors for all parameters are chosen automatically, to see how this
@@ -60,7 +63,7 @@ class BayesBimodalTest():
     """
 
     def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
-                 nprod=100, nwalkers=100, p_lower_bound=0):
+                 nprod=100, nwalkers=100, p_lower_bound=0, verbose=False):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -74,6 +77,11 @@ class BayesBimodalTest():
         self.saved_data = {}
         self.p_lower_bound = p_lower_bound
         self.fitted_Ns = []
+        self.verbose = verbose
+
+    def vprint(self, messg):
+        if self.verbose:
+            print(messg)
 
     def invert_saved_data_name(self, name):
         """ Helper function to generate N and skew from data filename """
@@ -213,7 +221,7 @@ class BayesBimodalTest():
         lnevidence, lnevidence_err = sampler_out1.thermodynamic_integration_log_evidence(
             fburnin=fburnin)
         if np.isinf(lnevidence):
-            print "Recalculating evidence for {} due to inf".format(name)
+            print("Recalculating evidence for {} due to inf".format(name))
             lnevidence, lnevidence_err = sampler_out1.RecalculateEvidence(
                 sampler_out1)
         log10evidence = lnevidence/np.log(10)
@@ -225,6 +233,8 @@ class BayesBimodalTest():
         self.saved_data[name] = saved_data
         self.summarise_posteriors(name)
         self.fitted_Ns.append(name)
+
+        print("Fitted {} model".format(name))
 
     def fit_Nmodal(self, N):
         """ Fit the N-component Gaussian mixture modal
@@ -474,7 +484,7 @@ class BayesBimodalTest():
         occams_factor = (np.log10(Umu[1] - Umu[0])
                          + np.log10(Usigma[1] - Usigma[0])
                          + np.log10(1))
-        print "Occams factor is {}".format(occams_factor)
+        print("Occams factor is {}".format(occams_factor))
 
     def RecalculateEvidence(self, sampler):
         """ Recalculate the evidence when logl contains nans """
@@ -528,8 +538,8 @@ class BayesBimodalTest():
                 mB_name, mB_evi, mB_err = mB
                 bf = mB_evi - mA_evi
                 bf_err = np.sqrt(mA_err**2 + mB_err**2)
-                print "log10 Bayes Factor ({}, {}) = {} +/- {}".format(
-                    mB_name, mA_name, bf, bf_err)
+                print("log10 Bayes Factor ({}, {}) = {} +/- {}".format(
+                    mB_name, mA_name, bf, bf_err))
 
         self.evi_err = evi_err
 
@@ -619,21 +629,20 @@ class BayesBimodalTest():
         nwalkers_list = [MakeEven(int(sampler.nwalkers/nviews), j)
                          for j in range(len(dview)-1)]
         nwalkers_list.append(MakeEven(sampler.nwalkers - sum(nwalkers_list)))
-        print("Splitting the original {} walkers over {} machines:\n".format(
+        self.vprint("Splitting the original {} walkers over {} machines:\n".format(
               sampler.nwalkers, nviews) +
               "#: nwalk, p0 index range")
         for i, nwalkers in enumerate(nwalkers_list):
             j = sum(nwalkers_list[:i])
             k = sum(nwalkers_list[:i+1])
-            print("{} : {}, {}->{}".format(i, nwalkers, j, k))
+            self.vprint("{} : {}, {}->{}".format(i, nwalkers, j, k))
             dview.push(dict(nwalkers=nwalkers, ID=i, j=j, k=k), targets=i)
-        print("Total: {}".format(sum(nwalkers_list)))
+        self.vprint("Total: {}".format(sum(nwalkers_list)))
 
-        print sampler.__doc__.split("\n")[1]
         dview['sampler'] = sampler
         dview.execute(run_line)
 
-        print("Execute code")
+        self.vprint("Execute code")
         dview.execute(
             "sampler.nwalkers = nwalkers\n"
             "sampler.reset()\n"
@@ -642,7 +651,6 @@ class BayesBimodalTest():
             "chain = sampler.chain[:, :, :, :]\n"
             "lnlikelihood = sampler.lnlikelihood[:, :, :]\n"
             "lnprobability = sampler.lnprobability[:, :, :]")
-        print("..done")
 
         chain = np.concatenate(dview.get("chain"), axis=1)
         lnlikelihood = np.concatenate(dview.get("lnlikelihood"), axis=1)
