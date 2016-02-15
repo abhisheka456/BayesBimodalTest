@@ -202,7 +202,7 @@ class BayesBimodalTest():
         if self.nburn0 != 0:
             sampler_out0 = self._try_parallel(sampler, p0, self.nburn0)
             saved_data["chains0"] = sampler_out0.chain[0, :, : , :]
-            p0 = self.get_new_p0(sampler, ndim)
+            p0 = self.get_new_p0(sampler_out0, ndim)
             sampler.reset()
         else:
             saved_data["chains0"] = None
