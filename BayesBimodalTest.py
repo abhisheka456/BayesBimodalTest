@@ -213,9 +213,9 @@ class BayesBimodalTest():
     def logp_SkewNmodal(self, params):
         N = (len(params) + 1) / 4
         mus = params[:N]
-        ps = params[2*N:] # Error?
         if any(np.diff(mus) < 0):
             return -np.inf
+        ps = params[3*N:]
         if np.sum(ps) > 1:
             return -np.inf
 
@@ -310,7 +310,7 @@ class BayesBimodalTest():
         return 2 * phi * Phi
 
     def diagnostic_plot(self, Ns=None, skews=None, fname="diagnostic.png",
-                        trace_line_width=0.1, hist_line_width=1.5, 
+                        trace_line_width=0.1, hist_line_width=1.5,
                         separate=False):
 
         if self.ntemps > 1:
