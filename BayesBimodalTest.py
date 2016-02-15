@@ -6,6 +6,11 @@ from emcee import PTSampler
 from scipy.special import erf
 import seaborn as sns
 
+try:
+    import ipyparallel as ipp
+    use_parallel_global = True
+except ImportError:
+    use_parallel_global = False
 
 class BayesBimodalTest():
     """ A Bayesian model comparison for N-modality in a data set
@@ -69,6 +74,13 @@ class BayesBimodalTest():
         self.saved_data = {}
         self.p_lower_bound = p_lower_bound
         self.fitted_Ns = []
+
+    def invert_saved_data_name(self, name):
+        """ Helper function to generate N and skew from data filename """
+        if "S" in name:
+            return int(name[-1]), True
+        else:
+            return int(name[-1]), False
 
     def saved_data_name(self, N, skew):
         """ Helper function to generate the saved data filename """
@@ -177,6 +189,43 @@ class BayesBimodalTest():
                           np.exp(-res**2/(2*sigma**2)), axis=1))
         return np.sum(r)
 
+    def fit_method(self, sampler, p0, name, ndim):
+        saved_data = {}
+        if self.nburn0 != 0:
+            out = sampler.run_mcmc(p0, self.nburn0)
+            sampler_out0 = self._try_parallel(sampler, p0, self.nburn0)
+            saved_data["chains0"] = sampler_out0.chain[0, :, : , :]
+            p0 = self.get_new_p0(sampler, ndim)
+            sampler.reset()
+        else:
+            saved_data["chains0"] = None
+
+        # Fit burn and production
+        sampler_out1 = self._try_parallel(sampler, p0, self.nburn + self.nprod)
+
+        # Add chains and samples to saved data
+        saved_data["chains"] = sampler_out1.chain[0, :, :, :]
+        saved_data["samples"] = sampler_out1.chain[0, :, self.nburn:, :].reshape(
+            (-1, ndim))
+
+        # Calculate and save the evidence
+        fburnin = float(self.nburn)/(self.nburn+self.nprod)
+        lnevidence, lnevidence_err = sampler_out1.thermodynamic_integration_log_evidence(
+            fburnin=fburnin)
+        if np.isinf(lnevidence):
+            print "Recalculating evidence for {} due to inf".format(name)
+            lnevidence, lnevidence_err = sampler_out1.RecalculateEvidence(
+                sampler_out1)
+        log10evidence = lnevidence/np.log(10)
+        log10evidence_err = lnevidence_err/np.log(10)
+        saved_data["log10evidence"] = log10evidence
+        saved_data["log10evidence_err"] = log10evidence_err
+        saved_data["alllnlikes"] = sampler_out1.lnlikelihood[:, :, self.nburn:]
+
+        self.saved_data[name] = saved_data
+        self.summarise_posteriors(name)
+        self.fitted_Ns.append(name)
+
     def fit_Nmodal(self, N):
         """ Fit the N-component Gaussian mixture modal
 
@@ -186,29 +235,13 @@ class BayesBimodalTest():
         """
 
         name = self.saved_data_name(N, False)
-        saved_data = {}
         ndim = N * 3 - 1
         sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
                             self.logp_Nmodal, loglargs=[self.data],
                             betas=self.betas)
         p0 = self.create_initial_p0(N)
 
-        if self.nburn0 != 0:
-            out = sampler.run_mcmc(p0, self.nburn0)
-            saved_data["chains0"] = sampler.chain[0, :, : , :]
-            p0 = self.get_new_p0(sampler, ndim)
-            sampler.reset()
-        else:
-            saved_data["chains0"] = None
-        out = sampler.run_mcmc(p0, self.nburn + self.nprod)
-        saved_data["chains"] = sampler.chain[0, :, :, :]
-
-        saved_data["sampler"] = sampler
-        saved_data["samples"] = sampler.chain[0, :, self.nburn:, :].reshape(
-            (-1, ndim))
-        self.saved_data[name] = saved_data
-        self.summarise_posteriors(N)
-        self.fitted_Ns.append(name)
+        self.fit_method(sampler, p0, name, ndim)
 
     def logp_SkewNmodal(self, params):
         N = (len(params) + 1) / 4
@@ -260,32 +293,19 @@ class BayesBimodalTest():
 
 
         name = self.saved_data_name(N, True)
-        saved_data = {}
         ndim = N*4 - 1
         sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_SkewNmodal,
                             self.logp_SkewNmodal, loglargs=[self.data],
                             betas=self.betas)
         p0 = self.create_initial_p0(N, skew=True)
 
-        if self.nburn0 != 0:
-            out = sampler.run_mcmc(p0, self.nburn0)
-            saved_data["chains0"] = sampler.chain[0, :, : , :]
-            p0 = self.get_new_p0(sampler, ndim)
-            sampler.reset()
+        self.fit_method(sampler, p0, name, ndim)
+
+    def summarise_posteriors(self, name=None, N=None, skew=False):
+        if name:
+            N, skew = self.invert_saved_data_name(name)
         else:
-            saved_data["chains0"] = None
-        out = sampler.run_mcmc(p0, self.nburn + self.nprod)
-        saved_data["chains"] = sampler.chain[0, :, :, :]
-
-        saved_data["sampler"] = sampler
-        saved_data["samples"] = sampler.chain[0, :, self.nburn:, :].reshape(
-            (-1, ndim))
-        self.saved_data[name] = saved_data
-        self.summarise_posteriors(N, skew=True)
-        self.fitted_Ns.append(name)
-
-    def summarise_posteriors(self, N, skew=False):
-        name = self.saved_data_name(N, skew)
+            name = self.saved_data_name(N, skew)
         saved_data = self.saved_data[name]
         saved_data['mus'] = [
             np.mean(saved_data['samples'][:, i]) for i in range(N)]
@@ -440,8 +460,7 @@ class BayesBimodalTest():
             for i, (N, skew) in enumerate(zip(Ns, skews)):
                 betas = self.betas
                 name = self.saved_data_name(N, skew)
-                alllnlikes = self.saved_data[name][
-                    'sampler'].lnlikelihood[:, :, self.nburn:]
+                alllnlikes = self.saved_data[name]['alllnlikes']
                 mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
                 ax40.semilogx(betas, mean_lnlikes, "-o", color=colors[i])
                 ax40.set_title("Linear thermodynamic integration")
@@ -499,15 +518,8 @@ class BayesBimodalTest():
         evi_err = []
         for N, skew in zip(Ns, skews):
             name = self.saved_data_name(N, skew)
-            sampler = self.saved_data[name]['sampler']
-            fburnin = float(self.nburn)/(self.nburn+self.nprod)
-            lnevidence, lnevidence_err = sampler.thermodynamic_integration_log_evidence(
-                fburnin=fburnin)
-            if np.isinf(lnevidence):
-                print "Recalculating evidence for {} due to inf".format(name)
-                lnevidence, lnevidence_err = sampler.RecalculateEvidence(sampler)
-            log10evidence = lnevidence/np.log(10)
-            log10evidence_err = lnevidence_err/np.log(10)
+            log10evidence = self.saved_data[name]['log10evidence']
+            log10evidence_err = self.saved_data[name]['log10evidence_err']
             evi_err.append((name, log10evidence, log10evidence_err))
 
         if print_result:
@@ -520,3 +532,134 @@ class BayesBimodalTest():
                     mB_name, mA_name, bf, bf_err)
 
         self.evi_err = evi_err
+
+
+    def _try_parallel(self, sampler, p0, N, run_line=""):
+        """ Attempt to run the sampler using IPython parallel, if not run seriel
+
+        Parameters
+        sampler: an emcee sampler object
+        p0: array
+            the initial values of the nwalkers
+        N: int
+            Number of steps to run
+        run_line: str
+            Executable python to be run on each machine
+
+        returns: sampler
+        """
+
+        p0 = np.array(p0)
+
+        # First check to see if the parallel has been set by the user
+        try:
+            use_parallel = sampler.use_parallel
+        except AttributeError:
+            use_parallel = True
+
+        if use_parallel_global is False:
+            use_parallel = False
+
+        if use_parallel:
+            try:
+                rc = ipp.Client()
+                dview = rc[:]
+                dview.execute("import numpy as np")
+                dview.block = True
+                dview.use_dill()  # Standard pickle fails with functions
+                sampler_result = self._run_sampler(dview, sampler, run_line, p0=p0, N=N)
+                rc.purge_everything()
+                rc.clear('all')
+                rc.metadata.clear()
+                rc.results.clear()
+                dview.results.clear()
+                return sampler_result
+            except IOError:
+                print("No clusters found, continue with seriel MCMC simulation")
+                sampler.run_mcmc(p0, N)
+                return sampler
+        else:
+            print("Running seriel MCMC simulation")
+            sampler.run_mcmc(p0, N)
+            return sampler
+
+
+    def _run_sampler(self, dview, sampler, run_line, **kwargs):
+        """ Run the sampler on all instances of the dview
+
+        This spreads the total workload over the n views. The basic idea is to
+        reduce the number of walkers on each view in inverse proportion to the
+        number of view that we have. So, it will reduce the time for any simultion
+        by a factor 1/nviews while still producing equivalent results.
+
+        Parameters
+        ----------
+        dview: a direct view of the machines
+        sampler: an emcee sampler object
+        run_line: str
+            Executable python to be run on each machine
+        kwargs:
+            Any variables to pass to the machines, must contain p0, N
+        """
+
+        nviews = len(dview)
+
+        for key, val in kwargs.items():
+            dview[key] = val
+
+        def MakeEven(num, j=0):
+            """ Make the number even by adding 1 if j is odd and subtracting if
+                j is even
+            """
+            if num % 2 == 0:
+                return num
+            else:
+                return num + [-1, 1][j % 2]
+
+        nwalkers_list = [MakeEven(int(sampler.nwalkers/nviews), j)
+                         for j in range(len(dview)-1)]
+        nwalkers_list.append(MakeEven(sampler.nwalkers - sum(nwalkers_list)))
+        print("Splitting the original {} walkers over {} machines:\n".format(
+              sampler.nwalkers, nviews) +
+              "#: nwalk, p0 index range")
+        for i, nwalkers in enumerate(nwalkers_list):
+            j = sum(nwalkers_list[:i])
+            k = sum(nwalkers_list[:i+1])
+            print("{} : {}, {}->{}".format(i, nwalkers, j, k))
+            dview.push(dict(nwalkers=nwalkers, ID=i, j=j, k=k), targets=i)
+        print("Total: {}".format(sum(nwalkers_list)))
+
+        print sampler.__doc__.split("\n")[1]
+        dview['sampler'] = sampler
+        dview.execute(run_line)
+
+        print("Execute code")
+        dview.execute(
+            "sampler.nwalkers = nwalkers\n"
+            "sampler.reset()\n"
+            "p0 = p0[:, j:k, :]\n"
+            "sampler.run_mcmc(p0, N)\n"
+            "chain = sampler.chain[:, :, :, :]\n"
+            "lnlikelihood = sampler.lnlikelihood[:, :, :]\n"
+            "lnprobability = sampler.lnprobability[:, :, :]")
+        print("..done")
+
+        chain = np.concatenate(dview.get("chain"), axis=1)
+        lnlikelihood = np.concatenate(dview.get("lnlikelihood"), axis=1)
+        lnprobability = np.concatenate(dview.get("lnprobability"), axis=1)
+
+        return fake_sampler_data(chain, lnlikelihood, lnprobability,
+                            sampler.betas, sampler.dim)
+
+class fake_sampler_data():
+    """ A fake PTSampler instance  that can be monkey patched"""
+    def __init__(self, chain, lnlikelihood, lnprobability, betas, dim):
+        self.chain = chain
+        self.lnlikelihood = lnlikelihood
+        self.lnprobability = lnprobability
+        self.betas = betas
+        self.dim = dim
+
+fake_sampler_data.thermodynamic_integration_log_evidence = (
+    PTSampler.thermodynamic_integration_log_evidence.im_func)
+
