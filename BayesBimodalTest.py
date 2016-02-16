@@ -221,7 +221,7 @@ class BayesBimodalTest():
             fburnin=fburnin)
         if np.isinf(lnevidence):
             print("Recalculating evidence for {} due to inf".format(name))
-            lnevidence, lnevidence_err = sampler_out1.RecalculateEvidence(
+            lnevidence, lnevidence_err = self.RecalculateEvidence(
                 sampler_out1)
         log10evidence = lnevidence/np.log(10)
         log10evidence_err = lnevidence_err/np.log(10)
