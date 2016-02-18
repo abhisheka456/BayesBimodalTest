@@ -54,6 +54,9 @@ class BayesBimodalTest():
         one, for example `p = 0.1`.
     verbose: bool
         Print additional information
+    uniform_scale_factor: float
+        A scaling factor used to decide the prior distributions - see
+        `get_uniform_prior_lims` to check how it is applied.
 
     Note:
         The priors for all parameters are chosen automatically, to see how this
@@ -63,7 +66,8 @@ class BayesBimodalTest():
     """
 
     def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
-                 nprod=100, nwalkers=100, p_lower_bound=0, verbose=False):
+                 nprod=100, nwalkers=100, p_lower_bound=0, verbose=False,
+                 uniform_scale_factor=10):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -78,6 +82,7 @@ class BayesBimodalTest():
         self.p_lower_bound = p_lower_bound
         self.fitted_Ns = []
         self.verbose = verbose
+        self.uniform_scale_factor = uniform_scale_factor
 
     def vprint(self, messg):
         if self.verbose:
@@ -101,12 +106,12 @@ class BayesBimodalTest():
         if (x < a) or (x > b):
             return -np.inf
         else:
-            return np.log(1./(b-a))
+            return -np.log(b-a)
 
     def log_norm(self, x, mu, sigma):
         return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
 
-    def get_uniform_prior_lims(self, key):
+    def get_p0_lims(self, key):
         """ Return uniform prior limits from the parameter name (key) """
         if key == "mu":
             return [self.data_min, self.data_max]
@@ -114,8 +119,19 @@ class BayesBimodalTest():
             return [1e-20*self.data_std, 2*self.data_std]
         if key == "p":
             return [self.p_lower_bound, 1]
-        if key == "alpha":  # Used to generate p0
+        if key == "alpha":
             return [-10*self.data_std, 10*self.data_std]
+
+    def get_uniform_prior_lims(self, key):
+        """ Return uniform prior limits from the parameter name (key) """
+        sf = self.uniform_scale_factor
+        if key == "mu":
+            drange = self.data_max - self.data_min
+            return [self.data_min - sf * drange, self.data_max + sf * drange]
+        if key == "sigma":
+            return [1e-20*self.data_std, sf*self.data_std]
+        if key == "p":
+            return [self.p_lower_bound, 1]
 
     def get_normal_prior_lims(self, key):
         """ Return uniform prior limits from the parameter name (key) """
@@ -139,14 +155,14 @@ class BayesBimodalTest():
                 for i, key in enumerate(param_keys):
                     if key == "mu":
                         component = np.mod(i, N)
-                        [lower, upper] = self.get_uniform_prior_lims(key)
+                        [lower, upper] = self.get_p0_lims(key)
                         dp = (upper - lower) / float(N)
                         component_range = [lower + component*dp,
                                            lower + (component+1)*dp]
                         p0_2.append(np.random.uniform(*component_range))
                     else:
                         p0_2.append(np.random.uniform(
-                            *self.get_uniform_prior_lims(key)))
+                            *self.get_p0_lims(key)))
                 p0_1.append(p0_2)
             p0.append(p0_1)
 
@@ -177,14 +193,14 @@ class BayesBimodalTest():
         if np.sum(ps) > 1-self.p_lower_bound:
             return -np.inf
 
-        logp = 0
-        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
+        sumv = 0
+        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
                         for p in mus])
-        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
+        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
                         for p in params[N:2*N]])
-        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
+        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
                         for p in params[2*N:]])
-        return logp
+        return sumv
 
     def logl_Nmodal(self, params, data):
         N = (len(params) + 1) / 3
@@ -245,8 +261,9 @@ class BayesBimodalTest():
 
         name = self.saved_data_name(N, False)
         ndim = N * 3 - 1
-        sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_Nmodal,
-                            self.logp_Nmodal, loglargs=[self.data],
+        sampler = PTSampler(self.ntemps, self.nwalkers, ndim,
+                            logl=self.logl_Nmodal,
+                            logp=self.logp_Nmodal, loglargs=[self.data],
                             betas=self.betas)
         p0 = self.create_initial_p0(N)
 
@@ -261,17 +278,16 @@ class BayesBimodalTest():
         if np.sum(ps) > 1:
             return -np.inf
 
-        logp = 0
-        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
+        sumv = 0
+        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
                         for p in mus])
-        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
+        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
                         for p in params[N:2*N]])
-        logp += np.sum([self.log_norm(p, *self.get_normal_prior_lims('alpha'))
+        sumv += np.sum([self.log_norm(p, *self.get_normal_prior_lims('alpha'))
                         for p in params[2*N:3*N]])
-        logp += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
+        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
                         for p in params[3*N:]])
-
-        return logp
+        return sumv
 
     def logl_SkewNmodal(self, params, data):
         N = (len(params) + 1) / 3
@@ -303,8 +319,9 @@ class BayesBimodalTest():
 
         name = self.saved_data_name(N, True)
         ndim = N*4 - 1
-        sampler = PTSampler(self.ntemps, self.nwalkers, ndim, self.logl_SkewNmodal,
-                            self.logp_SkewNmodal, loglargs=[self.data],
+        sampler = PTSampler(self.ntemps, self.nwalkers, ndim,
+                            logl=self.logl_SkewNmodal,
+                            logp=self.logp_SkewNmodal, loglargs=[self.data],
                             betas=self.betas)
         p0 = self.create_initial_p0(N, skew=True)
 
