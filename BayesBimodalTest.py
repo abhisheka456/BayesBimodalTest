@@ -74,7 +74,7 @@ class BayesBimodalTest():
     def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
                  nprod=100, nwalkers=100, p_lower_bound=0, verbose=False,
                  uniform_scale_factor=10, half_cauchy_scale_factor=2,
-                 normal_scale_factor=10):
+                 normal_scale_factor=10, p_beta_scale_factor=1):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -92,6 +92,7 @@ class BayesBimodalTest():
         self.uniform_scale_factor = uniform_scale_factor
         self.half_cauchy_scale_factor = half_cauchy_scale_factor
         self.normal_scale_factor = normal_scale_factor
+        self.p_beta_scale_factor = p_beta_scale_factor
 
     def vprint(self, messg):
         if self.verbose:
@@ -122,6 +123,11 @@ class BayesBimodalTest():
             return - np.inf
         else:
             return -np.log(np.pi*(gamma + x**2 / gamma))
+
+    def log_beta(self, x, alpha):
+        beta = (np.math.gamma(2*alpha) / (np.math.gamma(alpha)**2)) * (
+                x**(alpha-1.) * (1-x)**(alpha-1.))
+        return np.log(beta)
 
     def log_norm(self, x, mu, sigma):
         return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
@@ -157,6 +163,11 @@ class BayesBimodalTest():
         """ Return half-Cauchy prior limits from the parameter name (key) """
         if key == "sigma":
             return [self.half_cauchy_scale_factor*self.data_std]
+
+    def get_beta_prior_lims(self, key):
+        """ Return beta prior limits from the parameter name (key) """
+        if key == "p":
+            return [self.p_beta_scale_factor]
 
     def create_initial_p0(self, N, skew=False):
         """ Generates a sensible starting point for the walkers based on the
@@ -218,7 +229,7 @@ class BayesBimodalTest():
                         for p in mus])
         sumv += np.sum([self.log_half_cauchy(p, *self.get_half_cauchy_prior_lims('sigma'))
                         for p in params[N:2*N]])
-        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
+        sumv += np.sum([self.log_beta(p, *self.get_beta_prior_lims('p'))
                         for p in params[2*N:]])
         return sumv
 
