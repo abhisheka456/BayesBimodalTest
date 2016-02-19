@@ -57,6 +57,12 @@ class BayesBimodalTest():
     uniform_scale_factor: float
         A scaling factor used to decide the prior distributions - see
         `get_uniform_prior_lims` to check how it is applied.
+    half_cauchy_scale_factor: float
+        A scaling factor used to decide the prior distributions - see
+        `get_half_cauchy_prior_lims` to check how it is applied.
+    normal_scale_factor: float
+        A scaling factor used to decide the prior distributions - see
+        `get_normal_prior_lims` to check how it is applied.
 
     Note:
         The priors for all parameters are chosen automatically, to see how this
@@ -67,7 +73,8 @@ class BayesBimodalTest():
 
     def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
                  nprod=100, nwalkers=100, p_lower_bound=0, verbose=False,
-                 uniform_scale_factor=10):
+                 uniform_scale_factor=10, half_cauchy_scale_factor=2,
+                 normal_scale_factor=10):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -83,6 +90,8 @@ class BayesBimodalTest():
         self.fitted_Ns = []
         self.verbose = verbose
         self.uniform_scale_factor = uniform_scale_factor
+        self.half_cauchy_scale_factor = half_cauchy_scale_factor
+        self.normal_scale_factor = normal_scale_factor
 
     def vprint(self, messg):
         if self.verbose:
@@ -107,6 +116,12 @@ class BayesBimodalTest():
             return -np.inf
         else:
             return -np.log(b-a)
+
+    def log_half_cauchy(self, x, gamma):
+        if x < 0:
+            return - np.inf
+        else:
+            return np.log(np.pi*(gamma + x**2 / gamma))
 
     def log_norm(self, x, mu, sigma):
         return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
@@ -134,9 +149,14 @@ class BayesBimodalTest():
             return [self.p_lower_bound, 1]
 
     def get_normal_prior_lims(self, key):
-        """ Return uniform prior limits from the parameter name (key) """
+        """ Return normal prior limits from the parameter name (key) """
         if key == "alpha":
-            return [0, 10*self.data_std]
+            return [0, self.normal_scale_factor*self.data_std]
+
+    def get_half_cauchy_prior_lims(self, key):
+        """ Return half-Cauchy prior limits from the parameter name (key) """
+        if key == "sigma":
+            return [self.half_cauchy_scale_factor*self.data_std]
 
     def create_initial_p0(self, N, skew=False):
         """ Generates a sensible starting point for the walkers based on the
@@ -196,7 +216,7 @@ class BayesBimodalTest():
         sumv = 0
         sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
                         for p in mus])
-        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
+        sumv += np.sum([self.log_half_cauchy(p, *self.get_half_cauchy_prior_lims('sigma'))
                         for p in params[N:2*N]])
         sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
                         for p in params[2*N:]])
@@ -281,7 +301,7 @@ class BayesBimodalTest():
         sumv = 0
         sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
                         for p in mus])
-        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('sigma'))
+        sumv += np.sum([self.log_half_cauchy(p, *self.get_half_cauchy_prior_lims('sigma'))
                         for p in params[N:2*N]])
         sumv += np.sum([self.log_norm(p, *self.get_normal_prior_lims('alpha'))
                         for p in params[2*N:3*N]])
