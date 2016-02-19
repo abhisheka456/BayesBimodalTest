@@ -121,7 +121,7 @@ class BayesBimodalTest():
         if x < 0:
             return - np.inf
         else:
-            return np.log(np.pi*(gamma + x**2 / gamma))
+            return -np.log(np.pi*(gamma + x**2 / gamma))
 
     def log_norm(self, x, mu, sigma):
         return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
