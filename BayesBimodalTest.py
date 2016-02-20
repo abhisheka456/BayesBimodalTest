@@ -243,7 +243,8 @@ class BayesBimodalTest():
         sumv = 0
         sumv += np.sum([self.get_prior(x, 'mu') for x in mu])
         sumv += np.sum([self.get_prior(x, 'sigma') for x in sigma])
-        sumv += np.sum([self.get_prior(x, 'p') for x in p])
+        if len(p) > 1:
+            sumv += np.sum([self.get_prior(x, 'p') for x in p])
 
         return sumv
 
