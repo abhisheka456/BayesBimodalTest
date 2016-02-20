@@ -48,33 +48,28 @@ class BayesBimodalTest():
         The number of steps to take in the three stages of the MCMC fitting
     nwalkers : int
         The number of walkers to use
-    p_lower_bound: float [0, 1]
-        The lower bound for the p prior. Default is 0, but if one wants to
-        force modes to exist this can be set to a positive float less than
-        one, for example `p = 0.1`.
     verbose: bool
         Print additional information
-    uniform_scale_factor: float
-        A scaling factor used to decide the prior distributions - see
-        `get_uniform_prior_lims` to check how it is applied.
-    half_cauchy_scale_factor: float
-        A scaling factor used to decide the prior distributions - see
-        `get_half_cauchy_prior_lims` to check how it is applied.
-    normal_scale_factor: float
-        A scaling factor used to decide the prior distributions - see
-        `get_normal_prior_lims` to check how it is applied.
+    mu_scale_factor: float
+        Scale factor for the width of the uniform mixture means
+    sigma_scale_factor: float
+        Scale factor for the half-Cauchy prior on the standard deviation
+    alpha_scale_factor: float
+        Standard deviation scale factor used for the Normal skew prior
+    p_scale_factor: float
+        Beta shape parameter used for the p Beta prior
 
     Note:
-        The priors for all parameters are chosen automatically, to see how this
-        is implemented, or overwrite the defaults, see `get_uniform_prior_lims`
-        and `get_normal_prior_lims`.
+        The priors for all parameters are chosen automatically, but can be
+        scaled. To see how this is implemented, or overwrite the defaults, see
+        the `prior_spec`dictionary.
 
     """
 
     def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
-                 nprod=100, nwalkers=100, p_lower_bound=0, verbose=False,
-                 uniform_scale_factor=10, half_cauchy_scale_factor=2,
-                 normal_scale_factor=10, p_beta_scale_factor=1):
+                 nprod=100, nwalkers=100, verbose=False,
+                 mu_scale_factor=10, sigma_scale_factor=2,
+                 alpha_scale_factor=10, p_scale_factor=1):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -86,13 +81,27 @@ class BayesBimodalTest():
         self.nprod = nprod
         self.nwalkers = nwalkers
         self.saved_data = {}
-        self.p_lower_bound = p_lower_bound
         self.fitted_Ns = []
         self.verbose = verbose
-        self.uniform_scale_factor = uniform_scale_factor
-        self.half_cauchy_scale_factor = half_cauchy_scale_factor
-        self.normal_scale_factor = normal_scale_factor
-        self.p_beta_scale_factor = p_beta_scale_factor
+
+        self.mu_scale_factor = mu_scale_factor
+        self.sigma_scale_factor = sigma_scale_factor
+        self.alpha_scale_factor = alpha_scale_factor
+        self.p_scale_factor = p_scale_factor
+
+        drange = self.data_max - self.data_min
+        dave = 0.5*(self.data_max + self.data_min)
+        self.prior_spec = {'mu': {'func': self.log_unif,
+                                  'lower': dave - mu_scale_factor * drange,
+                                  'upper': dave + mu_scale_factor * drange},
+                           'sigma': {'func': self.log_half_cauchy,
+                                     'gamma': sigma_scale_factor * self.data_std},
+                           'p': {'func': self.log_beta,
+                                 'alpha': p_scale_factor},
+                           'alpha': {'func': self.log_norm,
+                                     'mu': 0,
+                                     'sigma': alpha_scale_factor * self.data_std}
+                           }
 
     def vprint(self, messg):
         if self.verbose:
@@ -112,62 +121,22 @@ class BayesBimodalTest():
         elif skew is True:
             return "NS{}".format(N)
 
-    def log_unif(self, x, a, b):
-        if (x < a) or (x > b):
-            return -np.inf
-        else:
-            return -np.log(b-a)
-
-    def log_half_cauchy(self, x, gamma):
-        if x < 0:
-            return - np.inf
-        else:
-            return -np.log(np.pi*(gamma + x**2 / gamma))
-
-    def log_beta(self, x, alpha):
-        beta = (np.math.gamma(2*alpha) / (np.math.gamma(alpha)**2)) * (
-                x**(alpha-1.) * (1-x)**(alpha-1.))
-        return np.log(beta)
-
-    def log_norm(self, x, mu, sigma):
-        return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
-
     def get_p0_lims(self, key):
-        """ Return uniform prior limits from the parameter name (key) """
+        """ Return uniform prior limits from the parameter name (key)
+
+        All walkers are initialised using a uniform distribiution with limits
+        specified by this routine.
+
+        """
+
         if key == "mu":
             return [self.data_min, self.data_max]
         if key == "sigma":
-            return [1e-20*self.data_std, 2*self.data_std]
+            return [0, self.data_std]
         if key == "p":
-            return [self.p_lower_bound, 1]
+            return [0, 1]
         if key == "alpha":
             return [-10*self.data_std, 10*self.data_std]
-
-    def get_uniform_prior_lims(self, key):
-        """ Return uniform prior limits from the parameter name (key) """
-        sf = self.uniform_scale_factor
-        if key == "mu":
-            drange = self.data_max - self.data_min
-            return [self.data_min - sf * drange, self.data_max + sf * drange]
-        if key == "sigma":
-            return [1e-20*self.data_std, sf*self.data_std]
-        if key == "p":
-            return [self.p_lower_bound, 1]
-
-    def get_normal_prior_lims(self, key):
-        """ Return normal prior limits from the parameter name (key) """
-        if key == "alpha":
-            return [0, self.normal_scale_factor*self.data_std]
-
-    def get_half_cauchy_prior_lims(self, key):
-        """ Return half-Cauchy prior limits from the parameter name (key) """
-        if key == "sigma":
-            return [self.half_cauchy_scale_factor*self.data_std]
-
-    def get_beta_prior_lims(self, key):
-        """ Return beta prior limits from the parameter name (key) """
-        if key == "p":
-            return [self.p_beta_scale_factor]
 
     def create_initial_p0(self, N, skew=False):
         """ Generates a sensible starting point for the walkers based on the
@@ -215,22 +184,49 @@ class BayesBimodalTest():
               for i in xrange(self.nwalkers)] for j in xrange(self.ntemps)]
         return p0
 
+    def log_unif(self, x, lower, upper):
+        if (x < lower) or (x > upper):
+            return -np.inf
+        else:
+            return -np.log(upper-lower)
+
+    def log_half_cauchy(self, x, gamma):
+        if x < 0:
+            return - np.inf
+        else:
+            return -np.log(np.pi*(gamma + x**2 / gamma))
+
+    def log_beta(self, x, alpha):
+        if (0 > x) or (x > 1):
+            return -np.inf
+        beta = (np.math.gamma(2*alpha) / (np.math.gamma(alpha)**2)) * (
+                x**(alpha-1.) * (1-x)**(alpha-1.))
+        return np.log(beta)
+
+    def log_norm(self, x, mu, sigma):
+        return -.5*((x-mu)**2/sigma**2 + np.log(sigma**2*2*np.pi))
+
+    def get_prior(self, x, key):
+        """ Wrapper to calculate the prior given self.prior_spec """
+        d = self.prior_spec[key].copy()
+        func = d.pop('func')
+        return func(x, **d)
+
     def logp_Nmodal(self, params):
         N = (len(params) + 1) / 3
         mus = params[:N]
+        sigmas = params[N:2*N]
         ps = params[2*N:]
         if any(np.diff(mus) < 0):
             return -np.inf
-        if np.sum(ps) > 1-self.p_lower_bound:
+        if np.sum(ps) > 1:
             return -np.inf
 
         sumv = 0
-        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
-                        for p in mus])
-        sumv += np.sum([self.log_half_cauchy(p, *self.get_half_cauchy_prior_lims('sigma'))
-                        for p in params[N:2*N]])
-        sumv += np.sum([self.log_beta(p, *self.get_beta_prior_lims('p'))
-                        for p in params[2*N:]])
+        sumv += np.sum([self.get_prior(x, 'mu') for x in mus])
+        sumv += np.sum([self.get_prior(x, 'sigma') for x in sigmas])
+        sumv += np.sum([self.get_prior(x, 'p') for x in ps])
+
         return sumv
 
     def logl_Nmodal(self, params, data):
@@ -243,44 +239,6 @@ class BayesBimodalTest():
         r = np.log(np.sum(p/(sigma*np.sqrt(2*np.pi)) *
                           np.exp(-res**2/(2*sigma**2)), axis=1))
         return np.sum(r)
-
-    def fit_method(self, sampler, p0, name, ndim):
-        saved_data = {}
-        if self.nburn0 != 0:
-            sampler_out0 = self._try_parallel(sampler, p0, self.nburn0)
-            saved_data["chains0"] = sampler_out0.chain[0, :, : , :]
-            p0 = self.get_new_p0(sampler_out0, ndim)
-            sampler.reset()
-        else:
-            saved_data["chains0"] = None
-
-        # Fit burn and production
-        sampler_out1 = self._try_parallel(sampler, p0, self.nburn + self.nprod)
-
-        # Add chains and samples to saved data
-        saved_data["chains"] = sampler_out1.chain[0, :, :, :]
-        saved_data["samples"] = sampler_out1.chain[0, :, self.nburn:, :].reshape(
-            (-1, ndim))
-
-        # Calculate and save the evidence
-        fburnin = float(self.nburn)/(self.nburn+self.nprod)
-        lnevidence, lnevidence_err = sampler_out1.thermodynamic_integration_log_evidence(
-            fburnin=fburnin)
-        if np.isinf(lnevidence):
-            print("Recalculating evidence for {} due to inf".format(name))
-            lnevidence, lnevidence_err = self.RecalculateEvidence(
-                sampler_out1)
-        log10evidence = lnevidence/np.log(10)
-        log10evidence_err = lnevidence_err/np.log(10)
-        saved_data["log10evidence"] = log10evidence
-        saved_data["log10evidence_err"] = log10evidence_err
-        saved_data["alllnlikes"] = sampler_out1.lnlikelihood[:, :, self.nburn:]
-
-        self.saved_data[name] = saved_data
-        self.summarise_posteriors(name)
-        self.fitted_Ns.append(name)
-
-        print("Fitted {} model".format(name))
 
     def fit_Nmodal(self, N):
         """ Fit the N-component Gaussian mixture modal
@@ -303,21 +261,21 @@ class BayesBimodalTest():
     def logp_SkewNmodal(self, params):
         N = (len(params) + 1) / 4
         mus = params[:N]
+        sigmas = params[N:2*N]
+        alphas = params[2*N:3*N]
+        ps = params[3*N:]
+
         if any(np.diff(mus) < 0):
             return -np.inf
-        ps = params[3*N:]
         if np.sum(ps) > 1:
             return -np.inf
 
         sumv = 0
-        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('mu'))
-                        for p in mus])
-        sumv += np.sum([self.log_half_cauchy(p, *self.get_half_cauchy_prior_lims('sigma'))
-                        for p in params[N:2*N]])
-        sumv += np.sum([self.log_norm(p, *self.get_normal_prior_lims('alpha'))
-                        for p in params[2*N:3*N]])
-        sumv += np.sum([self.log_unif(p, *self.get_uniform_prior_lims('p'))
-                        for p in params[3*N:]])
+        sumv += np.sum([self.get_prior(x, 'mu') for x in mus])
+        sumv += np.sum([self.get_prior(x, 'sigma') for x in sigmas])
+        sumv += np.sum([self.get_prior(x, 'alpha') for x in alphas])
+        sumv += np.sum([self.get_prior(x, 'p') for x in ps])
+
         return sumv
 
     def logl_SkewNmodal(self, params, data):
@@ -357,6 +315,45 @@ class BayesBimodalTest():
         p0 = self.create_initial_p0(N, skew=True)
 
         self.fit_method(sampler, p0, name, ndim)
+
+    def fit_method(self, sampler, p0, name, ndim):
+        saved_data = {}
+        if self.nburn0 != 0:
+            sampler_out0 = self._try_parallel(sampler, p0, self.nburn0)
+            saved_data["chains0"] = sampler_out0.chain[0, :, : , :]
+            p0 = self.get_new_p0(sampler_out0, ndim)
+            sampler.reset()
+        else:
+            saved_data["chains0"] = None
+
+        # Fit burn and production
+        sampler_out1 = self._try_parallel(sampler, p0, self.nburn + self.nprod)
+
+        # Add chains and samples to saved data
+        saved_data["chains"] = sampler_out1.chain[0, :, :, :]
+        saved_data["samples"] = sampler_out1.chain[0, :, self.nburn:, :].reshape(
+            (-1, ndim))
+
+        # Calculate and save the evidence
+        fburnin = float(self.nburn)/(self.nburn+self.nprod)
+        lnevidence, lnevidence_err = sampler_out1.thermodynamic_integration_log_evidence(
+            fburnin=fburnin)
+        if np.isinf(lnevidence):
+            print("Recalculating evidence for {} due to inf".format(name))
+            lnevidence, lnevidence_err = self.RecalculateEvidence(
+                sampler_out1)
+        log10evidence = lnevidence/np.log(10)
+        log10evidence_err = lnevidence_err/np.log(10)
+        saved_data["log10evidence"] = log10evidence
+        saved_data["log10evidence_err"] = log10evidence_err
+        saved_data["alllnlikes"] = sampler_out1.lnlikelihood[:, :, self.nburn:]
+
+        self.saved_data[name] = saved_data
+        self.summarise_posteriors(name)
+        self.fitted_Ns.append(name)
+
+        print("Fitted {} model".format(name))
+
 
     def summarise_posteriors(self, name=None, N=None, skew=False):
         if name:
