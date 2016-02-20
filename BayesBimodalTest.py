@@ -184,6 +184,27 @@ class BayesBimodalTest():
               for i in xrange(self.nwalkers)] for j in xrange(self.ntemps)]
         return p0
 
+    def unpack_params(self, params, skew=False):
+        if skew:
+            N = (len(params) + 1) / 4
+        else:
+            N = (len(params) + 1) / 3
+
+        mu = params[:N]
+        sigma = params[N:2*N]
+        if skew:
+            alpha = params[2*N:3*N]
+            p = params[3*N:]
+        else:
+            p = params[2*N:]
+
+        p = np.append(p, 1-np.sum(p))
+
+        if skew:
+            return mu, sigma, alpha, p
+        else:
+            return mu, sigma, p
+
     def log_unif(self, x, lower, upper):
         if (x < lower) or (x > upper):
             return -np.inf
@@ -213,28 +234,21 @@ class BayesBimodalTest():
         return func(x, **d)
 
     def logp_Nmodal(self, params):
-        N = (len(params) + 1) / 3
-        mus = params[:N]
-        sigmas = params[N:2*N]
-        ps = params[2*N:]
-        if any(np.diff(mus) < 0):
+        mu, sigma, p = self.unpack_params(params)
+        if any(np.diff(mu) < 0):
             return -np.inf
-        if np.sum(ps) > 1:
+        if np.sum(p) > 1:
             return -np.inf
 
         sumv = 0
-        sumv += np.sum([self.get_prior(x, 'mu') for x in mus])
-        sumv += np.sum([self.get_prior(x, 'sigma') for x in sigmas])
-        sumv += np.sum([self.get_prior(x, 'p') for x in ps])
+        sumv += np.sum([self.get_prior(x, 'mu') for x in mu])
+        sumv += np.sum([self.get_prior(x, 'sigma') for x in sigma])
+        sumv += np.sum([self.get_prior(x, 'p') for x in p])
 
         return sumv
 
     def logl_Nmodal(self, params, data):
-        N = (len(params) + 1) / 3
-        mu = np.array(params[:N])
-        sigma = np.array(params[N:2*N])
-        p = params[2*N:]
-        p = np.append(p, (1 - np.sum(p)))
+        mu, sigma, p = self.unpack_params(params)
         res = (data.reshape((len(data), 1)) - mu.T)
         r = np.log(np.sum(p/(sigma*np.sqrt(2*np.pi)) *
                           np.exp(-res**2/(2*sigma**2)), axis=1))
@@ -259,32 +273,23 @@ class BayesBimodalTest():
         self.fit_method(sampler, p0, name, ndim)
 
     def logp_SkewNmodal(self, params):
-        N = (len(params) + 1) / 4
-        mus = params[:N]
-        sigmas = params[N:2*N]
-        alphas = params[2*N:3*N]
-        ps = params[3*N:]
+        mu, sigma, alpha, p = self.unpack_params(params, skew=True)
 
-        if any(np.diff(mus) < 0):
+        if any(np.diff(mu) < 0):
             return -np.inf
-        if np.sum(ps) > 1:
+        if np.sum(p) > 1:
             return -np.inf
 
         sumv = 0
-        sumv += np.sum([self.get_prior(x, 'mu') for x in mus])
-        sumv += np.sum([self.get_prior(x, 'sigma') for x in sigmas])
-        sumv += np.sum([self.get_prior(x, 'alpha') for x in alphas])
-        sumv += np.sum([self.get_prior(x, 'p') for x in ps])
+        sumv += np.sum([self.get_prior(x, 'mu') for x in mu])
+        sumv += np.sum([self.get_prior(x, 'sigma') for x in sigma])
+        sumv += np.sum([self.get_prior(x, 'alpha') for x in alpha])
+        sumv += np.sum([self.get_prior(x, 'p') for x in p])
 
         return sumv
 
     def logl_SkewNmodal(self, params, data):
-        N = (len(params) + 1) / 3
-        mu = np.array(params[:N])
-        sigma = np.array(params[N:2*N])
-        alpha = np.array(params[2*N:3*N])
-        p = params[3*N:]
-        p = np.append(p, (1 - np.sum(p)))
+        mu, sigma, alpha, p = self.unpack_params(params, skew=True)
         res = (data.reshape((len(data), 1)) - mu.T)
         arg = alpha * res / (np.sqrt(2) * sigma)
         r = np.log(np.sum(2*p/(sigma*np.sqrt(2*np.pi)) *
@@ -361,20 +366,20 @@ class BayesBimodalTest():
         else:
             name = self.saved_data_name(N, skew)
         saved_data = self.saved_data[name]
-        saved_data['mus'] = [
+        saved_data['mu'] = [
             np.mean(saved_data['samples'][:, i]) for i in range(N)]
-        saved_data['sigmas'] = [
+        saved_data['sigma'] = [
             np.mean(saved_data['samples'][:, i]) for i in range(N, 2*N)]
         if skew:
-            saved_data['alphas'] = [
+            saved_data['alpha'] = [
                 np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N)]
-            saved_data['ps'] = [
+            saved_data['p'] = [
                 np.mean(saved_data['samples'][:, i]) for i in range(3*N, 4*N-1)]
-            saved_data['ps'].append(1-np.sum(saved_data['ps']))
+            saved_data['p'].append(1-np.sum(saved_data['p']))
         else:
-            saved_data['ps'] = [
+            saved_data['p'] = [
                 np.mean(saved_data['samples'][:, i]) for i in range(2*N, 3*N-1)]
-            saved_data['ps'].append(1-np.sum(saved_data['ps']))
+            saved_data['p'].append(1-np.sum(saved_data['p']))
 
         self.saved_data[name] = saved_data
 
@@ -451,11 +456,11 @@ class BayesBimodalTest():
             c = colors[i]
             saved_data = self.saved_data[name]
             if skew:
-                alphas = saved_data['alphas']
+                alpha = saved_data['alpha']
             else:
-                alphas = [0] * N
-            zi = zip(saved_data['ps'], saved_data['mus'], saved_data['sigmas'],
-                     alphas)
+                alpha = [0] * N
+            zi = zip(saved_data['p'], saved_data['mu'], saved_data['sigma'],
+                     alpha)
 
             for j, (p, mu, sigma, alpha) in enumerate(zi):
                 if separate:
