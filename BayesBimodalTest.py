@@ -69,7 +69,7 @@ class BayesBimodalTest():
     def __init__(self, data, ntemps=20, betamin=-22, nburn0=100, nburn=100,
                  nprod=100, nwalkers=100, verbose=False,
                  mu_scale_factor=10, sigma_scale_factor=2,
-                 alpha_scale_factor=10, p_scale_factor=1):
+                 alpha_scale_factor=10, p_shape_factor=(1, 1)):
         self.data = data
         self.data_min = np.min(data)
         self.data_max = np.max(data)
@@ -87,7 +87,7 @@ class BayesBimodalTest():
         self.mu_scale_factor = mu_scale_factor
         self.sigma_scale_factor = sigma_scale_factor
         self.alpha_scale_factor = alpha_scale_factor
-        self.p_scale_factor = p_scale_factor
+        self.p_shape_factor = p_shape_factor
 
         drange = self.data_max - self.data_min
         dave = 0.5*(self.data_max + self.data_min)
@@ -97,7 +97,7 @@ class BayesBimodalTest():
                            'sigma': {'func': self.log_half_cauchy,
                                      'gamma': sigma_scale_factor * self.data_std},
                            'p': {'func': self.log_beta,
-                                 'alpha': p_scale_factor},
+                                 'shape_factor': p_shape_factor},
                            'alpha': {'func': self.log_norm,
                                      'mu': 0,
                                      'sigma': alpha_scale_factor * self.data_std}
@@ -217,11 +217,13 @@ class BayesBimodalTest():
         else:
             return -np.log(np.pi*(gamma + x**2 / gamma))
 
-    def log_beta(self, x, alpha):
+    def log_beta(self, x, shape_factor):
+        alpha, beta = shape_factor
+        gamma = np.math.gamma
         if (0 > x) or (x > 1):
             return -np.inf
-        beta = (np.math.gamma(2*alpha) / (np.math.gamma(alpha)**2)) * (
-                x**(alpha-1.) * (1-x)**(alpha-1.))
+        beta = (gamma(alpha+beta)/(gamma(alpha)*gamma(beta)) * (
+                x**(alpha-1.) * (1-x)**(beta-1.)))
         return np.log(beta)
 
     def log_norm(self, x, mu, sigma):
