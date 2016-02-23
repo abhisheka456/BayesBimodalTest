@@ -91,8 +91,8 @@ class BayesBimodalTest():
         drange = self.data_max - self.data_min
         dave = 0.5*(self.data_max + self.data_min)
         self.prior_spec = {'mu': {'func': self.log_unif,
-                                  'lower': dave - mu_scale_factor * drange,
-                                  'upper': dave + mu_scale_factor * drange},
+                                  'lower': dave - 0.5*mu_scale_factor * drange,
+                                  'upper': dave + 0.5*mu_scale_factor * drange},
                            'sigma': {'func': self.log_half_cauchy,
                                      'gamma': sigma_scale_factor * self.data_std},
                            'p': {'func': self.log_beta,
