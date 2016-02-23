@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import itertools
 from emcee import PTSampler
 from scipy.special import erf
-import seaborn as sns
 
 try:
     import ipyparallel as ipp
@@ -488,15 +487,25 @@ class BayesBimodalTest():
                 else:
                     krange = N
                 for k in range(krange):
-                    lax.hist(saved_data['samples'][:, j*N+k], bins=50,
-                             linewidth=hist_line_width, histtype="step",
-                             color=c)
+                    samples = saved_data['samples'][:, j*N+k]
+                    hist, bin_edges = np.histogram(samples, bins=50)
+                    bin_mids = 0.5*(bin_edges[:-1] + bin_edges[1:])
+                    lax.plot(bin_mids, hist, color=c)
 
                     if saved_data['chains0'] is not None:
                         rax.plot(burn0s, saved_data['chains0'][:, :, j*N+k].T,
                                  lw=trace_line_width, color=c)
                     rax.plot(prods, saved_data['chains'][:, :, j*N+k].T,
                              lw=trace_line_width, color=c)
+
+                if krange == N-1:  # Add distribution of missing p val
+                    oth_samples = [saved_data['samples'][:, j*N+k] for k
+                                   in range(krange)]
+                    samples = 1-np.sum(oth_samples, axis=0)
+                    hist, bin_edges = np.histogram(samples, bins=50)
+                    bin_mids = 0.5*(bin_edges[:-1] + bin_edges[1:])
+                    lax.plot(bin_mids, hist, color=c)
+
 
         ax00.set_xlabel("Data")
         ax00.legend(loc=2, frameon=False)
@@ -518,14 +527,14 @@ class BayesBimodalTest():
                        lw=lw, alpha=0.4)
 
         if self.ntemps > 1:
-            ax40 = plt.subplot2grid((nrows, 2), (nrows-1, 0), colspan=2)
+            ax_evi = plt.subplot2grid((nrows, 2), (nrows-1, 0), colspan=2)
             for i, (N, skew) in enumerate(zip(Ns, skews)):
                 betas = self.betas
                 name = self.saved_data_name(N, skew)
                 alllnlikes = self.saved_data[name]['alllnlikes']
                 mean_lnlikes = np.mean(np.mean(alllnlikes, axis=1), axis=1)
-                ax40.semilogx(betas, mean_lnlikes, "-o", color=colors[i])
-                ax40.set_title("Linear thermodynamic integration")
+                ax_evi.semilogx(betas, mean_lnlikes, "-o", color=colors[i])
+                ax_evi.set_title("Linear thermodynamic integration")
 
         fig.tight_layout()
         fig.savefig(fname)
