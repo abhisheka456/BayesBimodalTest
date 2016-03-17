@@ -386,9 +386,9 @@ class BayesBimodalTest():
         self.saved_data[name] = saved_data
 
     def pdf(self, x, mu, sigma, p, alpha=0):
-        phi = p*ss.norm.pdf(x, mu, sigma)
+        phi = ss.norm.pdf(x, mu, sigma)
         Phi = .5 * (1 + erf(alpha * (x - mu)/sigma))
-        return 2 * phi * Phi
+        return 2 * p * phi * Phi
 
     def diagnostic_plot(self, Ns=None, skews=None, fname="diagnostic.png",
                         trace_line_width=0.1, hist_line_width=1.5,
@@ -422,12 +422,7 @@ class BayesBimodalTest():
 
         fig = plt.figure(figsize=(8, 11))
 
-        colors = [sns.xkcd_rgb["pale red"],
-                  sns.xkcd_rgb["medium green"],
-                  sns.xkcd_rgb["denim blue"],
-                  sns.xkcd_rgb["seafoam"],
-                  sns.xkcd_rgb["rich purple"]
-                  ]
+        colors = ["r", "b", "k", "g", "orange", "m", "olive"]
 
         burn0s = np.arange(0, self.nburn0)
         prods = np.arange(self.nburn0, self.nburn0+self.nburn + self.nprod)
