@@ -5,7 +5,7 @@ except ImportError:
 
 setup(name='BayesBimodalTest',
       packages=[''],
-      version='0.3.1',
+      version='0.3.2',
       description='',
       requires=[],
       author='Greg Ashton',
