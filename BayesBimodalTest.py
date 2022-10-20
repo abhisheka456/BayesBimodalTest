@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats as ss
 import matplotlib.pyplot as plt
 import itertools
-from ptemcee import PTSampler
+from ptemcee import Sampler
 from scipy.special import erf
 
 try:
