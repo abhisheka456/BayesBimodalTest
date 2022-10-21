@@ -724,6 +724,6 @@ class fake_sampler_data():
         self.betas = betas
         self.dim = dim
 
-fake_sampler_data.thermodynamic_integration_log_evidence = (
-    PTSampler.thermodynamic_integration_log_evidence.im_func)
+# fake_sampler_data.thermodynamic_integration_log_evidence = (
+#     PTSampler.thermodynamic_integration_log_evidence.im_func)
 
